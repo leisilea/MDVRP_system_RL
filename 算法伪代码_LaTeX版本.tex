@@ -1,0 +1,246 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{MDVRP算法伪代码集合}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{算法1：最佳位置插入算法}
+
+\begin{algorithm}[H]
+\caption{最佳位置插入算法}
+\label{alg:best-insertion}
+\begin{algorithmic}[1]
+\REQUIRE 待插入客户$c$, 目标仓库$d$, 路径集合$R_d$, 距离矩阵$Dist$, 容量约束$Q$, 里程约束$L$
+\ENSURE 更新后路径集合$R_d'$, 插入标志$flag$, 增量成本$\Delta_{best}$
+
+\STATE $\Delta_{best} \gets +\infty$, $best\_route \gets null$, $best\_pos \gets null$
+\FOR{each $r \in R_d$}
+    \IF{$\sum_{i \in r} demand[i] + demand[c] > Q$}
+        \STATE \textbf{continue}  \COMMENT{容量约束检查}
+    \ENDIF
+    \STATE $dist_r \gets$ calculate\_distance$(r, d, Dist)$
+    \FOR{$pos \gets 1$ to $|r| + 1$}
+        \STATE $r' \gets$ insert$(r, c, pos)$
+        \STATE $dist_{r'} \gets$ calculate\_distance$(r', d, Dist)$
+        \IF{$dist_{r'} > L$}
+            \STATE \textbf{continue}  \COMMENT{里程约束检查}
+        \ENDIF
+        \STATE $\Delta \gets dist_{r'} - dist_r$
+        \IF{$\Delta < \Delta_{best}$}
+            \STATE $\Delta_{best} \gets \Delta$, $best\_route \gets r$, $best\_pos \gets pos$
+        \ENDIF
+    \ENDFOR
+\ENDFOR
+
+\IF{$best\_route \neq null$}
+    \STATE insert$(best\_route, c, best\_pos)$, $flag \gets true$  \COMMENT{在最佳位置插入}
+\ELSIF{$demand[c] \leq Q$ \textbf{and} $2 \times Dist[d][c] \leq L$}
+    \STATE $R_d \gets R_d \cup \{[c]\}$, $\Delta_{best} \gets 2 \times Dist[d][c]$, $flag \gets true$  \COMMENT{创建新路径}
+\ELSE
+    \STATE $flag \gets false$  \COMMENT{插入失败}
+\ENDIF
+
+\RETURN $R_d$, $flag$, $\Delta_{best}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{说明}: 该算法在所有现有路径中寻找使增量成本最小的插入位置，若无法插入则尝试创建新路径。时间复杂度$O(|R_d| \times n^2)$。
+
+\newpage
+
+\section{算法2：边界客户跨仓库重分配}
+
+\begin{algorithm}[H]
+\caption{边界客户跨仓库重分配}
+\label{alg:boundary-reassignment}
+\begin{algorithmic}[1]
+\REQUIRE 所有仓库集合$D$, 各仓库路径集合$\{R_d \mid d \in D\}$, 距离矩阵$Dist$, 容量约束$Q$, 里程约束$L$, 边界阈值$\theta$
+\ENSURE 优化后的路径集合$\{R_d' \mid d \in D\}$, 总成本改善$\Delta_{total}$
+
+\STATE $\Delta_{total} \gets 0$, $improved \gets true$
+\WHILE{$improved$}
+    \STATE $improved \gets false$
+    \FOR{each 仓库对 $(d_i, d_j) \in D \times D$, $i \neq j$}
+        \STATE $BC \gets$ identify\_boundary\_customers$(d_i, d_j, R_{d_i}, Dist, \theta)$  \COMMENT{识别边界客户}
+        \FOR{each 边界客户 $c \in BC$}
+            \STATE $cost_{remove} \gets$ calculate\_removal\_cost$(c, R_{d_i}, d_i, Dist)$  \COMMENT{移除成本}
+            \STATE $R_{d_j}', flag, \Delta_{insert} \gets$ 算法\ref{alg:best-insertion}$(c, d_j, R_{d_j}, Dist, Q, L)$  \COMMENT{使用最佳位置插入}
+            \IF{$flag = true$ \textbf{and} $\Delta_{insert} < cost_{remove}$}  \COMMENT{插入成功且有益}
+                \STATE remove\_customer$(c, R_{d_i})$  \COMMENT{从原仓库移除}
+                \STATE $R_{d_j} \gets R_{d_j}'$  \COMMENT{更新目标仓库路径}
+                \STATE $\Delta_{total} \gets \Delta_{total} + (cost_{remove} - \Delta_{insert})$
+                \STATE $improved \gets true$
+            \ENDIF
+        \ENDFOR
+    \ENDFOR
+\ENDWHILE
+
+\RETURN $\{R_d' \mid d \in D\}$, $\Delta_{total}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{说明}: 该算法识别边界客户并尝试跨仓库重分配。第8行调用算法\ref{alg:best-insertion}执行最佳位置插入，自动处理容量和里程约束。时间复杂度$O(|D|^2 \times |BC| \times |R_d| \times n^2)$。
+
+\subsection{边界客户识别函数}
+
+\begin{algorithm}[H]
+\caption{识别边界客户}
+\label{alg:identify-boundary}
+\begin{algorithmic}[1]
+\REQUIRE 源仓库$d_i$, 目标仓库$d_j$, 源仓库路径集合$R_{d_i}$, 距离矩阵$Dist$, 边界阈值$\theta$
+\ENSURE 边界客户集合$BC$
+
+\STATE $BC \gets \emptyset$
+\FOR{each 路径 $r \in R_{d_i}$}
+    \FOR{each 客户 $c \in r$}
+        \IF{$Dist[d_j][c] < Dist[d_i][c] \times (1 + \theta)$}  \COMMENT{到目标仓库距离接近}
+            \STATE $BC \gets BC \cup \{c\}$
+        \ENDIF
+    \ENDFOR
+\ENDFOR
+
+\RETURN $BC$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{说明}: 边界客户定义为到目标仓库的距离接近当前仓库的客户。参数$\theta$控制边界范围（通常取0.1-0.2）。
+
+\newpage
+
+\section{算法3：2-opt局部搜索}
+
+\begin{algorithm}[H]
+\caption{2-opt局部搜索（路径内优化）}
+\label{alg:2opt}
+\begin{algorithmic}[1]
+\REQUIRE 路径$r$, 仓库$d$, 距离矩阵$Dist$, 最大迭代次数$max\_iter$
+\ENSURE 优化后的路径$r'$
+
+\STATE $improved \gets true$, $iter \gets 0$
+\WHILE{$improved$ \textbf{and} $iter < max\_iter$}
+    \STATE $improved \gets false$
+    \FOR{$i \gets 1$ to $|r| - 2$}
+        \FOR{$j \gets i + 2$ to $|r|$}
+            \STATE $r' \gets$ reverse$(r, i, j)$  \COMMENT{反转$r[i+1:j]$}
+            \IF{cost$(r') <$ cost$(r)$}
+                \STATE $r \gets r'$
+                \STATE $improved \gets true$
+                \STATE \textbf{break}
+            \ENDIF
+        \ENDFOR
+        \IF{$improved$}
+            \STATE \textbf{break}
+        \ENDIF
+    \ENDFOR
+    \STATE $iter \gets iter + 1$
+\ENDWHILE
+
+\RETURN $r$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{说明}: 通过反转路径中的一段来消除路径交叉，降低路径总长度。时间复杂度$O(n^2 \times iter)$。
+
+\newpage
+
+\section{算法4：路径间客户交换}
+
+\begin{algorithm}[H]
+\caption{路径间客户交换（同仓库路径间优化）}
+\label{alg:inter-route-exchange}
+\begin{algorithmic}[1]
+\REQUIRE 路径集合$R_d$, 仓库$d$, 距离矩阵$Dist$, 容量约束$Q$, 里程约束$L$
+\ENSURE 优化后的路径集合$R_d'$
+
+\STATE $improved \gets true$
+\WHILE{$improved$}
+    \STATE $improved \gets false$
+    \FOR{each 路径对 $(r_i, r_j) \in R_d \times R_d$, $i \neq j$}
+        \FOR{each 客户 $c_i \in r_i$}
+            \FOR{each 客户 $c_j \in r_j$}
+                \STATE $cost_{before} \gets$ cost$(r_i) +$ cost$(r_j)$
+                \STATE $r_i', r_j' \gets$ swap$(r_i, c_i, r_j, c_j)$  \COMMENT{交换客户}
+                \IF{feasible$(r_i', Q, L)$ \textbf{and} feasible$(r_j', Q, L)$}
+                    \STATE $cost_{after} \gets$ cost$(r_i') +$ cost$(r_j')$
+                    \IF{$cost_{after} < cost_{before}$}
+                        \STATE $r_i \gets r_i'$, $r_j \gets r_j'$
+                        \STATE $improved \gets true$
+                        \STATE \textbf{break}
+                    \ENDIF
+                \ENDIF
+            \ENDFOR
+            \IF{$improved$}
+                \STATE \textbf{break}
+            \ENDIF
+        \ENDFOR
+        \IF{$improved$}
+            \STATE \textbf{break}
+        \ENDIF
+    \ENDFOR
+\ENDWHILE
+
+\RETURN $R_d$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{说明}: 在同一仓库的不同路径之间交换客户，以降低总成本。时间复杂度$O(|R|^2 \times n^2)$。
+
+\newpage
+
+\section{算法组合策略}
+
+\subsection{典型的MDVRP求解流程}
+
+\begin{enumerate}
+    \item \textbf{阶段1: 初始解构造}
+    \begin{itemize}
+        \item 客户-仓库分配（最近仓库分配）
+        \item 路径构造（算法\ref{alg:best-insertion}：最佳位置插入）
+    \end{itemize}
+    
+    \item \textbf{阶段2: 仓库分配优化}
+    \begin{itemize}
+        \item 算法\ref{alg:boundary-reassignment}：边界客户跨仓库重分配
+    \end{itemize}
+    
+    \item \textbf{阶段3: 路径优化}
+    \begin{itemize}
+        \item 算法\ref{alg:2opt}：2-opt局部搜索（路径内优化）
+        \item 算法\ref{alg:inter-route-exchange}：路径间客户交换（路径间优化）
+    \end{itemize}
+    
+    \item \textbf{阶段4: 全局优化（遗传算法）}
+    \begin{itemize}
+        \item 选择、交叉、变异
+        \item 变异中使用：边界客户跨仓库重分配
+        \item 局部搜索：2-opt + 路径间交换
+    \end{itemize}
+\end{enumerate}
+
+\subsection{参数建议}
+
+\begin{table}[h]
+\centering
+\caption{算法参数推荐值}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{参数} & \textbf{推荐值} & \textbf{说明} \\
+\hline
+边界阈值 $\theta$ & 0.1-0.2 & 控制边界客户识别范围 \\
+2-opt迭代次数 & 50-200 & 平衡优化效果与计算时间 \\
+容量约束 $Q$ & 问题相关 & 车辆最大载重 \\
+里程约束 $L$ & 问题相关 & 车辆最大行驶距离 \\
+\hline
+\end{tabular}
+\end{table}
+
+\end{document}

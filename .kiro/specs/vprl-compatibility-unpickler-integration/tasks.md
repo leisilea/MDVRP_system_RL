@@ -1,0 +1,101 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - 旧版 TorchRL API Checkpoint 加载失败
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing case(s) to ensure reproducibility
+  - Test that loading a RouteFinder checkpoint containing old TorchRL API class names (CompositeSpec, BoundedTensorSpec, UnboundedContinuousTensorSpec, UnboundedDiscreteTensorSpec) fails with AttributeError
+  - Use real checkpoint file `epoch=19-step=1140.ckpt` or create a minimal test checkpoint with old API classes
+  - The test assertions should match the Expected Behavior Properties from design:
+    - After fix: `_load_model()` returns True
+    - After fix: model is successfully loaded and not None
+    - After fix: model is in eval mode
+    - After fix: model is on correct device
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS with AttributeError: "module 'torchrl.data.tensor_specs' has no attribute 'CompositeSpec'"
+  - Document counterexamples found to understand root cause:
+    - Exact error message and stack trace
+    - Which old API class names are present in the checkpoint
+    - Where in the loading process the error occurs (should be in PyTorch Lightning's load_from_checkpoint)
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - 非旧版 Checkpoint 加载行为保持不变
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs:
+    - Loading new-version checkpoint (with Composite, Bounded, etc.)
+    - Loading POMO model (fallback logic)
+    - Loading non-existent file (error handling)
+    - Loading same model twice (skip logic)
+    - Device mapping after successful load
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements:
+    - Test 1: New-version checkpoint loads successfully, returns True, model is not None
+    - Test 2: POMO model fallback works when RouteFinder import fails
+    - Test 3: Non-existent file returns False with error log
+    - Test 4: Loading same model twice skips reload and returns True
+    - Test 5: Model is moved to correct device after load
+    - Test 6: Model is set to eval mode after load
+  - Property-based testing generates many test cases for stronger guarantees
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [ ] 3. Fix for VPRL CompatibilityUnpickler 集成
+
+  - [x] 3.1 Implement the fix in VPRL/vprl_sampler.py
+    - Import CompatibilityUnpickler or implement inline class name mapping logic
+    - Save original `torch.serialization._load` function before calling `load_from_checkpoint()`
+    - Create patched version of `_load` that injects CompatibilityUnpickler's find_class logic:
+      - Map `torchrl.data.tensor_specs.CompositeSpec` → `torchrl.data.tensor_specs.Composite`
+      - Map `torchrl.data.tensor_specs.BoundedTensorSpec` → `torchrl.data.tensor_specs.Bounded`
+      - Map `torchrl.data.tensor_specs.UnboundedContinuousTensorSpec` → `torchrl.data.tensor_specs.UnboundedContinuous`
+      - Map `torchrl.data.tensor_specs.UnboundedDiscreteTensorSpec` → `torchrl.data.tensor_specs.UnboundedDiscrete`
+    - Apply monkey-patch to `torch.serialization._load` before calling `RouteFinderBase.load_from_checkpoint()`
+    - Wrap the load call in try-finally block to ensure patch is restored
+    - Restore original `torch.serialization._load` in finally block
+    - Only apply patch when loading RouteFinder model (not POMO)
+    - Keep all existing logic unchanged: error handling, logging, device mapping, eval mode setting, skip logic
+    - _Bug_Condition: isBugCondition(checkpoint_path, loading_context) where loading_context.has_old_api_classes == True_
+    - _Expected_Behavior: For all checkpoints with old API classes, _load_model() returns True and model loads successfully_
+    - _Preservation: All behaviors for new checkpoints, POMO models, error cases, device mapping, and logging remain unchanged_
+    - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 3.5_
+
+  - [x] 3.2 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - 旧版 TorchRL API Checkpoint 成功加载
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - Verify that:
+      - `_load_model()` returns True for old-version checkpoint
+      - Model is successfully loaded and not None
+      - Model is in eval mode
+      - Model is on correct device
+      - No AttributeError is raised
+    - _Requirements: 2.1, 2.2, 2.3_
+
+  - [x] 3.3 Verify preservation tests still pass
+    - **Property 2: Preservation** - 非旧版 Checkpoint 加载行为保持不变
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix:
+      - New-version checkpoint loading unchanged
+      - POMO fallback logic unchanged
+      - Error handling unchanged
+      - Skip logic unchanged
+      - Device mapping unchanged
+      - Eval mode setting unchanged
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run all tests (bug condition + preservation)
+  - Verify no regressions in existing functionality
+  - Test with real MDVRP instances if available
+  - Ask the user if questions arise

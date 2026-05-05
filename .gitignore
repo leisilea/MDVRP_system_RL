@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+*.log
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+target/
+*.iml
+.idea/
+.settings/
+.classpath
+.project
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+dist/
+.cache/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 算法结果文件（太大）
+*.json
+!package.json
+!tsconfig.json
+*.res
+*.pkl
+*.pth
+*.pt
+*.ckpt
+
+# HTTP 缓存
+http/
+http-v2/
+**/cache/
+**/.body
+
+# 临时文件
+*.tmp
+*.bak
+*.orig
