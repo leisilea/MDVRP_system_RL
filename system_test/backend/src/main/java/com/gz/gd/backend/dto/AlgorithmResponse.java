@@ -7,6 +7,7 @@ import java.util.Map;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
+// 上述注解为忽视未知字段防止未来添加新字段不合适
 public class AlgorithmResponse {
     private Boolean success;
     private SolutionData data;

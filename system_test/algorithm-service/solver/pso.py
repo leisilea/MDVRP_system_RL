@@ -1,8 +1,5 @@
 """
-粒子群算法求解器 (PSO) - 带完整约束版本
-包含：
-1. 车辆容量约束
-2. 路径长度约束（最大行驶距离）
+粒子群算法求解器 (PSO)
 """
 
 import numpy as np
@@ -103,13 +100,11 @@ def greedy_construct_route(customers, distance_matrix, depot_idx, demands,
     
     return route
 
-# ========================= V03 新增：多样化初始化策略 =========================
-
+# 混合式初始化,提高解质量
 def farthest_insertion(customers, distance_matrix, depot_idx, demands, 
                       capacity, max_distance, num_depots):
-    """
-    最远插入启发式：每次选择距离当前路径最远的客户插入
-    """
+    
+    # 最远插入启发式：每次选择距离当前路径最远的客户插入
     if not customers:
         return []
     
@@ -159,9 +154,8 @@ def farthest_insertion(customers, distance_matrix, depot_idx, demands,
 
 def savings_algorithm(customers, distance_matrix, depot_idx, demands, 
                      capacity, max_distance, num_depots):
-    """
-    节约算法启发式：计算合并两条路径的节约值，优先合并节约最大的
-    """
+
+    # 节约算法启发式 C-W算法
     if not customers:
         return []
     
@@ -233,10 +227,10 @@ def initialize_diverse_population(num_particles, customers, distance_matrix,
     多样化初始化粒子群
     
     策略分配：
-    - 30% 贪心构造（质量优先）
-    - 30% 随机构造（多样性优先）
-    - 20% 最远插入（分散性优先）
-    - 20% 节约算法（成本优先）
+    - 30% 贪心构造
+    - 30% 随机构造
+    - 20% 最远插入
+    - 20% 节约算法
     
     Returns:
         List[List[int]] - 初始化的粒子列表
@@ -447,117 +441,97 @@ def best_insertion(customer, routes, depot_idx, demands, distance_matrix,
     return best_route_idx, best_position, best_cost
 
 # ========================= V03 新增：跨仓库边界客户交换 =========================
+# 注意: 效果不好,已禁用
 
-def identify_boundary_customers_global(depot_assignments, distance_matrix, num_depots, threshold=0.8):
-    """
-    全局识别所有仓库的边界客户
-    
-    Args:
-        depot_assignments: Dict[int, List[int]] - 每个仓库分配的客户
-        distance_matrix: 距离矩阵
-        num_depots: 仓库数量
-        threshold: 边界客户判定阈值
-    
-    Returns:
-        Dict[int, List[Tuple]] - 每个仓库的边界客户列表 (customer, target_depot, distance_ratio)
-    """
-    boundary_info = {depot_idx: [] for depot_idx in range(num_depots)}
-    
-    for depot_idx, customers in depot_assignments.items():
-        for customer in customers:
-            dist_to_current = distance_matrix[depot_idx, customer]
-            
-            # 找到最近的其他仓库
-            min_dist_to_other = float('inf')
-            best_other_depot = -1
-            
-            for other_depot_idx in range(num_depots):
-                if other_depot_idx != depot_idx:
-                    dist = distance_matrix[other_depot_idx, customer]
-                    if dist < min_dist_to_other:
-                        min_dist_to_other = dist
-                        best_other_depot = other_depot_idx
-            
-            # 如果其他仓库更近
-            if min_dist_to_other < dist_to_current * threshold:
-                distance_ratio = min_dist_to_other / dist_to_current
-                boundary_info[depot_idx].append((customer, best_other_depot, distance_ratio))
-    
-    return boundary_info
-
-
-def inter_depot_customer_swap(depot_assignments, boundary_info, demands, 
-                              distance_matrix, capacity, max_distance, num_depots):
-    """
-    执行跨仓库客户交换
-    
-    Args:
-        depot_assignments: Dict[int, List[int]] - 当前客户分配
-        boundary_info: Dict[int, List[Tuple]] - 边界客户信息
-        demands: 客户需求数组
-        distance_matrix: 距离矩阵
-        capacity: 车辆容量
-        max_distance: 各仓库的最大路径长度
-        num_depots: 仓库数量
-    
-    Returns:
-        bool - 是否执行了交换
-    """
-    # 收集所有边界客户
-    all_boundary_customers = []
-    for depot_idx, customers_info in boundary_info.items():
-        for customer, target_depot, ratio in customers_info:
-            all_boundary_customers.append((depot_idx, customer, target_depot, ratio))
-    
-    if not all_boundary_customers:
-        return False
-    
-    # 按距离比率排序，优先交换距离差异最大的
-    all_boundary_customers.sort(key=lambda x: x[3])
-    
-    # 尝试交换前几个边界客户
-    swapped = False
-    for source_depot, customer, target_depot, ratio in all_boundary_customers[:3]:
-        # 检查目标仓库是否有容量
-        target_load = sum(demands[c - num_depots] for c in depot_assignments[target_depot])
-        customer_demand = demands[customer - num_depots]
-        
-        # 简单检查：假设每个仓库最多10辆车
-        if target_load + customer_demand <= capacity * 10:
-            # 执行交换
-            depot_assignments[source_depot].remove(customer)
-            depot_assignments[target_depot].append(customer)
-            swapped = True
-            print(f"      跨仓库交换: 客户{customer} 从仓库{source_depot+1} 转移到仓库{target_depot+1} (距离比率: {ratio:.2f})")
-            break  # 每次只交换一个客户
-    
-    return swapped
+# def identify_boundary_customers_global(depot_assignments, distance_matrix, num_depots, threshold=0.8):
+#     """
+#     全局识别所有仓库的边界客户
+#     
+#     Args:
+#         depot_assignments: Dict[int, List[int]] - 每个仓库分配的客户
+#         distance_matrix: 距离矩阵
+#         num_depots: 仓库数量
+#         threshold: 边界客户判定阈值
+#     
+#     Returns:
+#         Dict[int, List[Tuple]] - 每个仓库的边界客户列表 (customer, target_depot, distance_ratio)
+#     """
+#     boundary_info = {depot_idx: [] for depot_idx in range(num_depots)}
+#     
+#     for depot_idx, customers in depot_assignments.items():
+#         for customer in customers:
+#             dist_to_current = distance_matrix[depot_idx, customer]
+#             
+#             # 找到最近的其他仓库
+#             min_dist_to_other = float('inf')
+#             best_other_depot = -1
+#             
+#             for other_depot_idx in range(num_depots):
+#                 if other_depot_idx != depot_idx:
+#                     dist = distance_matrix[other_depot_idx, customer]
+#                     if dist < min_dist_to_other:
+#                         min_dist_to_other = dist
+#                         best_other_depot = other_depot_idx
+#             
+#             # 如果其他仓库更近
+#             if min_dist_to_other < dist_to_current * threshold:
+#                 distance_ratio = min_dist_to_other / dist_to_current
+#                 boundary_info[depot_idx].append((customer, best_other_depot, distance_ratio))
+#     
+#     return boundary_info
 
 
-# ========================= PSO 主算法类 =========================
+# def inter_depot_customer_swap(depot_assignments, boundary_info, demands, 
+#                               distance_matrix, capacity, max_distance, num_depots):
+#     """
+#     执行跨仓库客户交换
+#     
+#     Args:
+#         depot_assignments: Dict[int, List[int]] - 当前客户分配
+#         boundary_info: Dict[int, List[Tuple]] - 边界客户信息
+#         demands: 客户需求数组
+#         distance_matrix: 距离矩阵
+#         capacity: 车辆容量
+#         max_distance: 各仓库的最大路径长度
+#         num_depots: 仓库数量
+#     
+#     Returns:
+#         bool - 是否执行了交换
+#     """
+#     # 收集所有边界客户
+#     all_boundary_customers = []
+#     for depot_idx, customers_info in boundary_info.items():
+#         for customer, target_depot, ratio in customers_info:
+#             all_boundary_customers.append((depot_idx, customer, target_depot, ratio))
+#     
+#     if not all_boundary_customers:
+#         return False
+#     
+#     # 按距离比率排序，优先交换距离差异最大的
+#     all_boundary_customers.sort(key=lambda x: x[3])
+#     
+#     # 尝试交换前几个边界客户
+#     swapped = False
+#     for source_depot, customer, target_depot, ratio in all_boundary_customers[:3]:
+#         # 检查目标仓库是否有容量
+#         target_load = sum(demands[c - num_depots] for c in depot_assignments[target_depot])
+#         customer_demand = demands[customer - num_depots]
+#         
+#         # 简单检查：假设每个仓库最多10辆车
+#         if target_load + customer_demand <= capacity * 10:
+#             # 执行交换
+#             depot_assignments[source_depot].remove(customer)
+#             depot_assignments[target_depot].append(customer)
+#             swapped = True
+#             print(f"      跨仓库交换: 客户{customer} 从仓库{source_depot+1} 转移到仓库{target_depot+1} (距离比率: {ratio:.2f})")
+#             break  # 每次只交换一个客户
+#     
+#     return swapped
 
 class ParticleSwarmOptimizerWithConstraints:
-    """
-    粒子群优化算法求解 MDVRP（带完整约束）
-    
-    主要特性：
-    1. 车辆容量约束
-    2. 路径长度约束
-    3. 基于顺序交叉的粒子更新
-    4. 个体最优和全局最优跟踪
-    5. 自适应惯性权重
-    """
 
     def __init__(self, instance, params, depot_id_map=None, customer_id_map=None):
-        """
-        初始化粒子群优化器
-        
-        Args:
-            instance: MDVRPInstance - 问题实例
-            params: Dict[str, Any] - 算法参数
-            depot_id_map: dict - 仓库ID映射（可选）
-            customer_id_map: dict - 客户ID映射（可选）
-        """
+
         self.instance = instance
         self.params = params
         self.depot_id_map = depot_id_map or {i: i + 1 for i in range(instance.num_depots)}
@@ -584,12 +558,6 @@ class ParticleSwarmOptimizerWithConstraints:
             self.max_route_distances = np.zeros(instance.num_depots)
 
     def solve(self):
-        """
-        主求解函数
-        
-        Returns:
-            Dict[str, Any] - 求解结果，包含routes, totalCost, computeTime等
-        """
         start_time = time.time()
 
         print(f"开始粒子群优化 (PSO带完整约束) - 粒子数: {self.num_particles}, 迭代数: {self.max_iterations}")
@@ -623,104 +591,106 @@ class ParticleSwarmOptimizerWithConstraints:
                 total_cost_all_depots += depot_cost
 
         # ========== 跨仓库边界客户优化 ==========
-        if self.instance.num_depots > 1:
-            print("\n执行跨仓库边界客户优化...")
-            initial_cost = total_cost_all_depots
-            
-            for swap_iteration in range(5):  # 最多5次迭代
-                # 识别所有仓库的边界客户
-                boundary_info = identify_boundary_customers_global(
-                    {i: depot_assignments[i] for i in range(len(depot_assignments))},
-                    self.instance.distance_matrix,
-                    self.instance.num_depots,
-                    threshold=0.8
-                )
-                
-                # 尝试跨仓库交换
-                swapped = inter_depot_customer_swap(
-                    {i: depot_assignments[i] for i in range(len(depot_assignments))},
-                    boundary_info,
-                    self.instance.demands,
-                    self.instance.distance_matrix,
-                    self.instance.vehicle_capacity,
-                    self.max_route_distances,
-                    self.instance.num_depots
-                )
-                
-                if not swapped:
-                    print(f"  第{swap_iteration + 1}次迭代: 没有可交换的边界客户")
-                    break
-                
-                # 重新计算受影响仓库的成本
-                # (简化版: 只重新解码路径，不重新运行PSO)
-                all_depot_solutions = []
-                total_cost_all_depots = 0.0
-                
-                for depot_idx in range(self.instance.num_depots):
-                    if not depot_assignments[depot_idx]:
-                        continue
-                    
-                    # 使用贪心构造快速生成路径
-                    max_distance = self.max_route_distances[depot_idx] if depot_idx < len(self.max_route_distances) else 0
-                    particle = greedy_construct_route(
-                        depot_assignments[depot_idx],
-                        self.instance.distance_matrix,
-                        depot_idx,
-                        self.instance.demands,
-                        self.instance.vehicle_capacity,
-                        max_distance,
-                        self.instance.num_depots
-                    )
-                    
-                    # 补充剩余客户
-                    remaining = [c for c in depot_assignments[depot_idx] if c not in particle]
-                    particle.extend(remaining)
-                    
-                    # 解码为路径
-                    routes, cost = decode_and_split_routes(
-                        particle, depot_idx, self.instance.demands,
-                        self.instance.distance_matrix, self.instance.vehicle_capacity,
-                        max_distance, self.instance.num_depots
-                    )
-                    
-                    # 格式化路径
-                    for route in routes:
-                        route_cost = calculate_route_cost(route, self.instance.distance_matrix, depot_idx)
-                        all_depot_solutions.append({
-                            'depotId': depot_idx + 1,
-                            'route': route,
-                            'cost': route_cost
-                        })
-                    
-                    total_cost_all_depots += cost
-            
-            final_improvement = initial_cost - total_cost_all_depots
-            if final_improvement > 0:
-                print(f"  跨仓库优化完成: 成本从 {initial_cost:.2f} 降低到 {total_cost_all_depots:.2f}")
-                print(f"  节省: {final_improvement:.2f} ({final_improvement/initial_cost*100:.2f}%)")
-            else:
-                print(f"  跨仓库优化完成: 成本保持在 {total_cost_all_depots:.2f}")
-            
-            # 将跨仓库优化后的最终成本追加到收敛数据
-            # 找到最后一个generation编号
-            last_gen = 0
-            for depot_conv in depot_convergence_data:
-                if depot_conv:
-                    last_gen = max(last_gen, depot_conv[-1]['generation'])
-            
-            # 为每个仓库追加最终成本记录点
-            for depot_idx, depot_conv in enumerate(depot_convergence_data):
-                if depot_conv and depot_assignments[depot_idx]:
-                    # 计算该仓库的最终成本
-                    depot_final_cost = sum(
-                        sol['cost'] for sol in all_depot_solutions 
-                        if sol['depotId'] == depot_idx + 1
-                    )
-                    depot_conv.append({
-                        'generation': last_gen + 10,  # 在最后一代后面追加
-                        'best_cost': float(depot_final_cost),
-                        'avg_cost': float(depot_final_cost)
-                    })
+        # 注意: 效果不好已禁用
+        
+        # if self.instance.num_depots > 1:
+        #     print("\n执行跨仓库边界客户优化...")
+        #     initial_cost = total_cost_all_depots
+        #     
+        #     for swap_iteration in range(5):  # 最多5次迭代
+        #         # 识别所有仓库的边界客户
+        #         boundary_info = identify_boundary_customers_global(
+        #             {i: depot_assignments[i] for i in range(len(depot_assignments))},
+        #             self.instance.distance_matrix,
+        #             self.instance.num_depots,
+        #             threshold=0.8
+        #         )
+        #         
+        #         # 尝试跨仓库交换
+        #         swapped = inter_depot_customer_swap(
+        #             {i: depot_assignments[i] for i in range(len(depot_assignments))},
+        #             boundary_info,
+        #             self.instance.demands,
+        #             self.instance.distance_matrix,
+        #             self.instance.vehicle_capacity,
+        #             self.max_route_distances,
+        #             self.instance.num_depots
+        #         )
+        #         
+        #         if not swapped:
+        #             print(f"  第{swap_iteration + 1}次迭代: 没有可交换的边界客户")
+        #             break
+        #         
+        #         # 重新计算受影响仓库的成本
+        #         # (简化版: 只重新解码路径，不重新运行PSO)
+        #         all_depot_solutions = []
+        #         total_cost_all_depots = 0.0
+        #         
+        #         for depot_idx in range(self.instance.num_depots):
+        #             if not depot_assignments[depot_idx]:
+        #                 continue
+        #             
+        #             # 使用贪心构造快速生成路径
+        #             max_distance = self.max_route_distances[depot_idx] if depot_idx < len(self.max_route_distances) else 0
+        #             particle = greedy_construct_route(
+        #                 depot_assignments[depot_idx],
+        #                 self.instance.distance_matrix,
+        #                 depot_idx,
+        #                 self.instance.demands,
+        #                 self.instance.vehicle_capacity,
+        #                 max_distance,
+        #                 self.instance.num_depots
+        #             )
+        #             
+        #             # 补充剩余客户
+        #             remaining = [c for c in depot_assignments[depot_idx] if c not in particle]
+        #             particle.extend(remaining)
+        #             
+        #             # 解码为路径
+        #             routes, cost = decode_and_split_routes(
+        #                 particle, depot_idx, self.instance.demands,
+        #                 self.instance.distance_matrix, self.instance.vehicle_capacity,
+        #                 max_distance, self.instance.num_depots
+        #             )
+        #             
+        #             # 格式化路径
+        #             for route in routes:
+        #                 route_cost = calculate_route_cost(route, self.instance.distance_matrix, depot_idx)
+        #                 all_depot_solutions.append({
+        #                     'depotId': depot_idx + 1,
+        #                     'route': route,
+        #                     'cost': route_cost
+        #                 })
+        #             
+        #             total_cost_all_depots += cost
+        #     
+        #     final_improvement = initial_cost - total_cost_all_depots
+        #     if final_improvement > 0:
+        #         print(f"  跨仓库优化完成: 成本从 {initial_cost:.2f} 降低到 {total_cost_all_depots:.2f}")
+        #         print(f"  节省: {final_improvement:.2f} ({final_improvement/initial_cost*100:.2f}%)")
+        #     else:
+        #         print(f"  跨仓库优化完成: 成本保持在 {total_cost_all_depots:.2f}")
+        #     
+        #     # 将跨仓库优化后的最终成本追加到收敛数据
+        #     # 找到最后一个generation编号
+        #     last_gen = 0
+        #     for depot_conv in depot_convergence_data:
+        #         if depot_conv:
+        #             last_gen = max(last_gen, depot_conv[-1]['generation'])
+        #     
+        #     # 为每个仓库追加最终成本记录点
+        #     for depot_idx, depot_conv in enumerate(depot_convergence_data):
+        #         if depot_conv and depot_assignments[depot_idx]:
+        #             # 计算该仓库的最终成本
+        #             depot_final_cost = sum(
+        #                 sol['cost'] for sol in all_depot_solutions 
+        #                 if sol['depotId'] == depot_idx + 1
+        #             )
+        #             depot_conv.append({
+        #                 'generation': last_gen + 10,  # 在最后一代后面追加
+        #                 'best_cost': float(depot_final_cost),
+        #                 'avg_cost': float(depot_final_cost)
+        #             })
         # ==========================================
 
         # 合并所有仓库的收敛数据
@@ -733,21 +703,8 @@ class ParticleSwarmOptimizerWithConstraints:
         return self._format_solution(all_depot_solutions, total_cost_all_depots, compute_time, convergence_data)
 
     def _solve_for_depot(self, depot_idx, assigned_customers, max_distance, convergence_data):
-        """
-        为单个仓库运行 PSO（带完整约束）
-        
-        Args:
-            depot_idx: int - 仓库索引
-            assigned_customers: List[int] - 分配给该仓库的客户列表
-            max_distance: float - 最大行驶距离
-            convergence_data: List[Dict] - 收敛数据记录
-        
-        Returns:
-            Tuple[List[Dict], float] - (格式化的路径列表, 总成本)
-        """
-        """为单个仓库运行 PSO（带完整约束）"""
-        
-        # 初始化粒子群 - V03: 使用多样化初始化策略
+
+        # 初始化
         particles = initialize_diverse_population(
             self.num_particles, assigned_customers,
             self.instance.distance_matrix, depot_idx,
@@ -840,7 +797,7 @@ class ParticleSwarmOptimizerWithConstraints:
                 print(f"    早停: {early_stop_threshold}代没有改进，在第{iteration+1}代停止")
                 break
             
-            # 记录收敛数据 (改为每10代记录，与ACO一致)
+            # 记录收敛数据 (为了绘制收敛曲线)
             if iteration % 10 == 0:
                 avg_cost = np.mean(pbest_costs)
                 convergence_data.append({
@@ -859,17 +816,18 @@ class ParticleSwarmOptimizerWithConstraints:
         
         # 验证所有路径的可行性
         print(f"    仓库 {depot_idx + 1} 最终解: {len(best_routes)}条路径")
-        for idx, route in enumerate(best_routes):
-            route_cost = calculate_route_cost(route, self.instance.distance_matrix, depot_idx)
-            route_load = sum(self.instance.demands[c - self.instance.num_depots] for c in route)
-            feasible = check_route_feasibility(
-                route, depot_idx, self.instance.demands,
-                self.instance.distance_matrix, self.instance.vehicle_capacity,
-                max_distance, self.instance.num_depots
-            )
-            status = "✓" if feasible else "✗"
-            print(f"      路径{idx+1}: 成本={route_cost:.2f}, 负载={route_load}/{self.instance.vehicle_capacity}, "
-                  f"长度={route_cost:.2f}/{max_distance if max_distance > 0 else '无限制'} {status}")
+        # print(f"    仓库 {depot_idx + 1} 最终解: {len(best_routes)}条路径")
+        # for idx, route in enumerate(best_routes):
+        #     route_cost = calculate_route_cost(route, self.instance.distance_matrix, depot_idx)
+        #     route_load = sum(self.instance.demands[c - self.instance.num_depots] for c in route)
+        #     feasible = check_route_feasibility(
+        #         route, depot_idx, self.instance.demands,
+        #         self.instance.distance_matrix, self.instance.vehicle_capacity,
+        #         max_distance, self.instance.num_depots
+        #     )
+        #     status = "✓" if feasible else "✗"
+        #     print(f"      路径{idx+1}: 成本={route_cost:.2f}, 负载={route_load}/{self.instance.vehicle_capacity}, "
+        #           f"长度={route_cost:.2f}/{max_distance if max_distance > 0 else '无限制'} {status}")
         
         # 格式化为返回格式
         formatted_routes = []
@@ -884,13 +842,6 @@ class ParticleSwarmOptimizerWithConstraints:
         return formatted_routes, best_cost
 
     def _assign_customers_to_depots(self):
-        """
-        将客户分配给仓库（基于距离和容量限制）
-        
-        Returns:
-            List[List[int]] - 每个仓库分配到的客户列表
-        """
-        """将客户分配给仓库（基于距离和容量限制）"""
         depot_assignments = [[] for _ in range(self.instance.num_depots)]
 
         # 计算每个客户到各仓库的距离
@@ -908,8 +859,6 @@ class ParticleSwarmOptimizerWithConstraints:
 
         # 贪心分配，考虑仓库容量限制
         depot_loads = [0] * self.instance.num_depots
-        # 正确计算：车辆容量 × 每个仓库的车辆数
-        # 平均分配总车辆数给各个仓库
         vehicles_per_depot = self.instance.num_vehicles // self.instance.num_depots
         depot_max_loads = [self.instance.vehicle_capacity * vehicles_per_depot 
                           for _ in range(self.instance.num_depots)]
@@ -935,17 +884,6 @@ class ParticleSwarmOptimizerWithConstraints:
         return depot_assignments
 
     def _merge_depot_convergence(self, depot_data_list):
-        """
-        合并多个仓库的收敛数据
-        
-        核心逻辑: 在第t代，MDVRP总成本 = Σ(每个仓库在第t代的成本)
-        
-        Args:
-            depot_data_list: List[List[Dict]] - 每个仓库的收敛数据
-            
-        Returns:
-            List[Dict] - 合并后的收敛数据，按generation对齐并累加成本
-        """
         if not depot_data_list:
             return []
         
@@ -984,19 +922,6 @@ class ParticleSwarmOptimizerWithConstraints:
         return merged
 
     def _format_solution(self, all_routes, total_cost, compute_time, convergence_data):
-        """
-        格式化解为API返回格式
-        
-        Args:
-            all_routes: List[Dict] - 所有路径信息
-            total_cost: float - 总成本
-            compute_time: float - 计算时间
-            convergence_data: List[Dict] - 收敛数据
-        
-        Returns:
-            Dict[str, Any] - 格式化的解决方案
-        """
-        """格式化解为API返回格式"""
         if not all_routes:
             return {
                 'routes': [],
@@ -1038,26 +963,9 @@ class ParticleSwarmOptimizerWithConstraints:
         }
 
 
-if __name__ == "__main__":
-    print("粒子群算法 (PSO带完整约束) 模块加载成功")
-
-
-# ========================= PSO 求解器包装类 =========================
-
 class ParticleSwarmSolver:
-    """
-    粒子群算法求解器 - 适配 MDVRPSolver 接口
-    """
 
     def __init__(self, depots, customers, params):
-        """
-        粒子群算法求解器 - 适配 MDVRPSolver 接口
-        
-        Args:
-            depots: List[Dict] - 仓库列表
-            customers: List[Dict] - 客户列表
-            params: Dict[str, Any] - 算法参数
-        """
         # 导入 MDVRPInstance
         import sys
         import os
@@ -1109,12 +1017,6 @@ class ParticleSwarmSolver:
         self.params = params
 
     def solve(self):
-        """
-        求解 MDVRP
-        
-        Returns:
-            Dict[str, Any] - 求解结果
-        """
         optimizer = ParticleSwarmOptimizerWithConstraints(
             self.instance, 
             self.params,

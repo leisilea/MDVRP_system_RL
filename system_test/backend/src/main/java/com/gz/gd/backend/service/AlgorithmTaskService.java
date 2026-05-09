@@ -20,15 +20,13 @@ import java.util.Map;
  * 算法任务服务层
  * 提供任务的增删改查和业务逻辑
  */
+// AlgorithmTaskService --> ApplicationEventPublisher(包含TaskEventListener -->AsyncAlgorithmService  的事件配置)
 @Slf4j
 @Service
 public class AlgorithmTaskService {
     
     @Autowired
     private AlgorithmTaskMapper algorithmTaskMapper;
-    
-    @Autowired
-    private AsyncAlgorithmService asyncAlgorithmService;
     
     @Autowired
     private ObjectMapper objectMapper;

@@ -20,10 +20,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ==================== 异常处理装饰器 ====================
+# ==================== 异常处理器 ====================
 
 def handle_exceptions(f):
-    """统一异常处理装饰器"""
     def wrapper(*args, **kwargs):
         try:
             return f(*args, **kwargs)
@@ -64,10 +63,10 @@ def handle_exceptions(f):
     return wrapper
 
 
-# ==================== 输入验证函数 ====================
+# ==================== 输入验证 ====================
 
 def validate_depot(depot, index):
-    """验证仓库数据"""
+    #验证仓库数据
     required_fields = ['id', 'x', 'y', 'vehicles', 'capacity']
     for field in required_fields:
         if field not in depot:
@@ -88,7 +87,7 @@ def validate_depot(depot, index):
 
 
 def validate_customer(customer, index):
-    """验证客户数据"""
+    #验证客户数据
     required_fields = ['id', 'x', 'y', 'demand']
     for field in required_fields:
         if field not in customer:
@@ -101,7 +100,8 @@ def validate_customer(customer, index):
 
 
 def validate_request_data(data):
-    """验证请求数据"""
+    #验证请求数据
+
     # 检查基本结构
     if not data:
         raise ValueError("请求体不能为空")
@@ -143,18 +143,18 @@ def validate_request_data(data):
         raise ValueError("'params' 必须是对象")
     
     algorithm = params.get('algorithm', 'genetic')
-    valid_algorithms = ['genetic', 'GA', 'ga_multiprogramming', 'ant_colony', 'ACO', 'PSO', 'SA', 'tabu_search', 'LKH3', 'lkh3', 'LKH', 'GA_MDVRP_JAVA', 'ga_mdvrp_java', 'GA_RL_HYBRID', 'ga_rl_hybrid', 'hybrid']
+    valid_algorithms = ['genetic', 'ga_multiprogramming', 'GA_RL_HYBRID', 'ACO', 'PSO']
     if algorithm not in valid_algorithms:
-        raise ValueError(f"不支持的算法: {algorithm}，支持的算法: GA, ga_multiprogramming, ACO, PSO, GA_MDVRP_JAVA, GA_RL_HYBRID")
+        raise ValueError(f"不支持的算法: {algorithm}，支持的算法: {', '.join(valid_algorithms)}")
     
     return True
 
 
-# ==================== API 路由 ====================
+# ==================== 接口 ====================
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """健康检查接口"""
+    # 检查接口
     logger.info("健康检查请求")
     return jsonify({
         'success': True,
@@ -210,7 +210,7 @@ def solve_mdvrp():
     start_time = time.time()
     data = request.json
     
-    # 验证输入数据
+    # 验证处理输入数据
     validate_request_data(data)
     
     depots = data['depots']
@@ -219,11 +219,10 @@ def solve_mdvrp():
     
     logger.info(f"收到求解请求 - 仓库数: {len(depots)}, 客户数: {len(customers)}, 算法: {params.get('algorithm', 'genetic')}")
     
-    # 调用求解器
+    # 使用数据调用求解器 接受solution
     solver = create_solver(depots, customers, params)
     result = solver.solve()
     
-    # 格式转换：统一使用驼峰命名（SpringBoot期望的格式）
     solution = {
         'routes': result.get('routes', []),
         'totalCost': result.get('totalCost', result.get('total_cost', 0)),
@@ -233,11 +232,9 @@ def solve_mdvrp():
         'convergence': result.get('convergence', [])
     }
     
-    # 如果有错误信息，也添加进去
+    # 记录错误+时间+日志
     if 'error' in result:
         solution['error'] = result['error']
-    
-    # 添加时间戳
     solution['timestamp'] = time.time()
     
     logger.info(f"求解完成 - 总成本: {solution['totalCost']:.2f}, "
@@ -250,85 +247,73 @@ def solve_mdvrp():
         'timestamp': time.time()
     })
 
-
-@app.route('/api/algorithms', methods=['GET'])
-def list_algorithms():
-    """列出可用的算法列表"""
-    return jsonify({
-        'success': True,
-        'data': {
-            'algorithms': [
-                {
-                    'id': 'genetic',
-                    'name': '遗传算法 (GA)',
-                    'description': '基于自然选择的启发式算法，适用于各种规模的问题',
-                    'status': 'available',
-                    'aliases': ['GA']
-                },
-                {
-                    'id': 'ga_multiprogramming',
-                    'name': '多进程遗传算法 (GA Multiprocessing)',
-                    'description': '使用多进程加速的遗传算法',
-                    'status': 'available',
-                    'aliases': []
-                },
-                {
-                    'id': 'ant_colony',
-                    'name': '蚁群算法 (ACO)',
-                    'description': '模拟蚂蚁觅食行为的优化算法',
-                    'status': 'available',
-                    'aliases': ['ACO']
-                },
-                {
-                    'id': 'PSO',
-                    'name': '粒子群算法 (PSO)',
-                    'description': '基于群体智能的优化算法',
-                    'status': 'available',
-                    'aliases': []
-                },
-                {
-                    'id': 'GA_MDVRP_JAVA',
-                    'name': 'GA-MDVRP (Java)',
-                    'description': '基于 Ombuki-Berman 2009 论文的遗传算法 Java 实现',
-                    'status': 'available',
-                    'aliases': ['ga_mdvrp_java'],
-                    'paper': 'Ombuki-Berman & Hanshar (2009)',
-                    'source': 'markusmkim/GA-MDVRP',
-                    'requires': 'Java 11+'
-                },
-                {
-                    'id': 'GA_RL_HYBRID',
-                    'name': 'GA + RouteFinder 混合求解器',
-                    'description': '结合遗传算法和强化学习(RouteFinder)的混合求解器，使用RL生成高质量初始种群',
-                    'status': 'available',
-                    'aliases': ['ga_rl_hybrid', 'hybrid'],
-                    'paper': 'RouteFinder (2024)',
-                    'requires': 'PyTorch, TorchRL, CUDA (optional)'
-                },
-                {
-                    'id': 'tabu_search',
-                    'name': '禁忌搜索',
-                    'description': '使用禁忌表的局部搜索算法',
-                    'status': 'not_implemented'
-                }
-            ]
-        },
-        'timestamp': time.time()
-    })
+ #目前算法是写在前端,未使用此接口
+# @app.route('/api/algorithms', methods=['GET'])
+# def list_algorithms():
+#     # 列出可用的算法列表
+#     return jsonify({
+#         'success': True,
+#         'data': {
+#             'algorithms': [
+#                 {
+#                     'id': 'genetic',
+#                     'name': '遗传算法 (GA-MDVRP)',
+#                     'description': '基于 Ombuki-Berman 2009 论文的遗传算法 Java 实现',
+#                     'status': 'available',
+#                     'aliases': ['GA'],
+#                     'paper': 'Ombuki-Berman & Hanshar (2009)',
+#                     'source': 'markusmkim/GA-MDVRP',
+#                     'requires': 'Java 11+'
+#                 },
+#                 {
+#                     'id': 'ga_multiprogramming',
+#                     'name': '多进程遗传算法 (GA Multiprocessing)',
+#                     'description': '使用多进程加速的遗传算法 Python 实现',
+#                     'status': 'available',
+#                     'aliases': []
+#                 },
+#                 {
+#                     'id': 'ACO',
+#                     'name': '蚁群算法 (ACO)',
+#                     'description': '模拟蚂蚁觅食行为的优化算法',
+#                     'status': 'available',
+#                     'aliases': []
+#                 },
+#                 {
+#                     'id': 'PSO',
+#                     'name': '粒子群算法 (PSO)',
+#                     'description': '基于群体智能的优化算法',
+#                     'status': 'available',
+#                     'aliases': []
+#                 },
+#                 {
+#                     'id': 'GA_RL_HYBRID',
+#                     'name': 'GA + RouteFinder 混合求解器',
+#                     'description': '结合遗传算法和强化学习(RouteFinder)的混合求解器，使用RL生成高质量初始种群',
+#                     'status': 'available',
+#                     'aliases': ['ga_rl_hybrid', 'hybrid'],
+#                     'paper': 'RouteFinder (2024)',
+#                     'requires': 'PyTorch, TorchRL, CUDA (optional)'
+#                 }
+#             ]
+#         },
+#         'timestamp': time.time()
+#     })
 
 
-@app.route('/api/test', methods=['POST'])
-@handle_exceptions
-def test_connection():
-    """测试连接的简单接口"""
-    data = request.json
-    logger.info(f"测试接口收到数据: {data}")
-    return jsonify({
-        'success': True,
-        'message': '连接成功！',
-        'received': data,
-        'timestamp': time.time()
-    })
+# 测试连接接口 - 未使用,已注释
+# @app.route('/api/test', methods=['POST'])
+# @handle_exceptions
+# def test_connection():
+#     """测试连接的简单接口"""
+#     data = request.json
+#     logger.info(f"测试接口收到数据: {data}")
+#     return jsonify({
+#         'success': True,
+#         'message': '连接成功！',
+#         'received': data,
+#         'timestamp': time.time()
+#     })
 
 
 @app.route('/api/replan', methods=['POST'])
@@ -593,7 +578,7 @@ def _validate_replan_request(data):
     # 验证算法（可选）
     if 'algorithm' in data:
         algorithm = data['algorithm']
-        valid_algorithms = ['GA', 'ACO', 'PSO', 'GA-MP', 'GA-RL']
+        valid_algorithms = ['genetic', 'ga_multiprogramming', 'GA_RL_HYBRID', 'ACO', 'PSO']
         if algorithm not in valid_algorithms:
             raise ValueError(f"不支持的算法: {algorithm}，支持的算法: {', '.join(valid_algorithms)}")
     

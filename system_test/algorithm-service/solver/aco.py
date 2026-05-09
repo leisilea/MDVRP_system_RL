@@ -1,7 +1,4 @@
-"""
-蚁群算法(ACO)
-使用多进程并行加速
-"""
+﻿# 蚁群算法(ACO)
 
 import numpy as np
 import time
@@ -41,11 +38,6 @@ def _init_worker(instance, pheromone_matrix, eta_matrix, alpha, beta):
     _global_beta = beta
 
 
-# ========================= 核心计算函数（使用NumPy数组实现）=========================
-'''
-    input : 点1,2
-    output: 距离
-'''
 def calculate_distance(coord1, coord2):
     """计算两点间欧几里得距离"""
     return np.sqrt(np.sum((coord1 - coord2) ** 2))
@@ -271,20 +263,7 @@ def _construct_route_for_depot_worker(depot_idx, available_customers,
 
     return route
 
-
-# ========================= 主要算法类 =========================
-
 class ImprovedAntColonyOptimizer:
-    """
-    改进的蚁群优化算法求解 MDVRP
-
-    主要改进：
-    1. 自适应参数调整
-    2. 精英蚂蚁策略
-    3. 局部搜索优化 (2-opt)
-    4. 多进程并行构造（CPU多核加速）
-    5. 大规模问题优化
-    """
 
     def __init__(self, instance, params, depot_id_map=None, customer_id_map=None):
         self.instance = instance
@@ -676,7 +655,6 @@ class AntColonySolver:
         self.params = params
 
     def solve(self):
-        """求解 MDVRP"""
         optimizer = ImprovedAntColonyOptimizer(
             self.instance, 
             self.params,
@@ -686,53 +664,3 @@ class AntColonySolver:
         return optimizer.solve()
 
 
-# ========================= 兼容性函数（如果需要） =========================
-
-def solve_instance_with_ant_colony(instance_data,
-                                  params):
-    """
-    兼容性函数：使用蚁群算法求解实例
-
-    Args:
-        instance_data: 包含 depots 和 customers 的字典
-        params: 算法参数
-
-    Returns:
-        Dict: 求解结果
-    """
-    solver = AntColonySolver(
-        depots=instance_data['depots'],
-        customers=instance_data['customers'],
-        params=params
-    )
-
-    return solver.solve()
-
-
-if __name__ == "__main__":
-    # 简单测试
-    print("蚁群算法 (ACO) 模块加载成功")
-
-    # 测试数据
-    test_depots = [
-        {'id': 1, 'x': 0, 'y': 0, 'vehicles': 3, 'capacity': 100}
-    ]
-
-    test_customers = [
-        {'id': 1, 'x': 10, 'y': 20, 'demand': 15},
-        {'id': 2, 'x': 30, 'y': 40, 'demand': 20},
-        {'id': 3, 'x': 50, 'y': 30, 'demand': 25}
-    ]
-
-    test_params = {
-        'algorithm': 'ACO',
-        'num_ants': 10,
-        'max_iterations': 50
-    }
-
-    try:
-        solver = AntColonySolver(test_depots, test_customers, test_params)
-        result = solver.solve()
-        print(f"测试成功 - 总成本: {result['total_cost']:.2f}")
-    except Exception as e:
-        print(f"测试失败: {e}")

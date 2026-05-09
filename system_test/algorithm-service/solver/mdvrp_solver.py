@@ -308,14 +308,14 @@ def create_solver(depots, customers, params):
     Args:
         depots: 仓库列表
         customers: 客户列表
-        params: 算法参数，包含 'algorithm' 字段
+        params: 算法参数,包含 'algorithm' 字段
     
     Returns:
         MDVRPSolver: 求解器实例
     """
     algorithm = params.get('algorithm', 'genetic')
     
-    if algorithm == 'genetic' or algorithm == 'GA':
+    if algorithm == 'genetic':
         # GA算法 - 使用Java版本 (Ombuki-Berman 2009)
         return GeneticAlgorithmSolver(depots, customers, params)
     elif algorithm == 'ga_multiprogramming':
@@ -329,21 +329,8 @@ def create_solver(depots, customers, params):
         # 粒子群算法 (Particle Swarm Optimization)
         from . import pso
         return pso.ParticleSwarmSolver(depots, customers, params)
-    elif algorithm == 'SA':
-        # 模拟退火算法尚未实现
-        raise NotImplementedError("模拟退火算法 (SA) 尚未实现，请选择 GA, ACO 或 PSO 算法")
-    elif algorithm == 'ant_colony':
-        # 兼容旧的命名
-        from . import aco
-        return aco.AntColonySolver(depots, customers, params)
-    elif algorithm == 'GA_MDVRP_JAVA' or algorithm == 'ga_mdvrp_java':
-        # GA-MDVRP Java 版本（Ombuki-Berman 2009） - 与genetic相同
-        return GAMDVRPJavaSolver(depots, customers, params)
-    elif algorithm == 'GA_RL_HYBRID' or algorithm == 'ga_rl_hybrid' or algorithm == 'hybrid':
+    elif algorithm == 'GA_RL_HYBRID':
         # GA-MDVRP + RouteFinder 混合求解器
         return GAMDVRPRLHybridSolver(depots, customers, params)
-    elif algorithm == 'tabu_search':
-        # TODO: 实现禁忌搜索
-        raise NotImplementedError("禁忌搜索尚未实现")
     else:
-        raise ValueError(f"不支持的算法类型: {algorithm}，支持的算法: GA, ga_multiprogramming, ACO, PSO, GA_MDVRP_JAVA, GA_RL_HYBRID")
+        raise ValueError(f"不支持的算法类型: {algorithm}，支持的算法: genetic, ga_multiprogramming, ACO, PSO, GA_RL_HYBRID")

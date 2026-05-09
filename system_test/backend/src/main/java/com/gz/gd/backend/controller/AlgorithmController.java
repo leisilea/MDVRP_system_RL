@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// 自动生成日志 + RESTAPI + 跨域
 @Slf4j
 @RestController
 @CrossOrigin(origins = "*")
@@ -29,31 +30,31 @@ public class AlgorithmController {
     private ObjectMapper objectMapper;
     
     /**
-     * 调用算法求解（同步方式）
+     * 调用算法求解（老同步方式）
      * POST /api/algorithm/solve
      */
-    @PostMapping("/api/algorithm/solve")
-    public Result<AlgorithmResponse> solve(@RequestBody Map<String, Object> request) {
-        log.info("接收到算法求解请求: {}", request);
+    // @PostMapping("/api/algorithm/solve")
+    // public Result<AlgorithmResponse> solve(@RequestBody Map<String, Object> request) {
+    //     log.info("接收到算法求解请求: {}", request);
         
-        try {
-            Long scenarioId = Long.valueOf(request.get("scenarioId").toString());
-            @SuppressWarnings("unchecked")
-            Map<String, Object> params = (Map<String, Object>) request.get("params");
+    //     try {
+    //         Long scenarioId = Long.valueOf(request.get("scenarioId").toString());
+    //         @SuppressWarnings("unchecked")
+    //         Map<String, Object> params = (Map<String, Object>) request.get("params");
             
-            AlgorithmResponse response = algorithmService.solve(scenarioId, params);
+    //         AlgorithmResponse response = algorithmService.solve(scenarioId, params);
             
-            if (response != null && response.getSuccess()) {
-                return Result.success(response);
-            } else {
-                String errorMsg = response != null ? response.getError() : "算法求解失败";
-                return Result.error(errorMsg);
-            }
-        } catch (Exception e) {
-            log.error("算法求解异常", e);
-            return Result.error("算法求解异常: " + e.getMessage());
-        }
-    }
+    //         if (response != null && response.getSuccess()) {
+    //             return Result.success(response);
+    //         } else {
+    //             String errorMsg = response != null ? response.getError() : "算法求解失败";
+    //             return Result.error(errorMsg);
+    //         }
+    //     } catch (Exception e) {
+    //         log.error("算法求解异常", e);
+    //         return Result.error("算法求解异常: " + e.getMessage());
+    //     }
+    // }
     
     /**
      * 提交异步算法任务
@@ -61,7 +62,7 @@ public class AlgorithmController {
      */
     @PostMapping("/api/algorithm/submit")
     public Result<Map<String, Object>> submitTask(@RequestBody Map<String, Object> request) {
-        log.info("接收到异步算法任务提交请求: {}", request);
+        log.info("接收到算法任务提交请求: {}", request);
         
         try {
             Long scenarioId = Long.valueOf(request.get("scenarioId").toString());

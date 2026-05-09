@@ -8,26 +8,6 @@ GA-MDVRP + RouteFinder 混合求解器
 3. 生成初始种群：80% 随机 + 20% RL生成
 4. RL部分：将分割后的子问题转换为npz → RouteFinder推理 → 转回GA格式
 5. 合并初始种群并运行GA优化
-
-【重要须知 - 必须严格遵守】：
-1. **必须参照已经成功的代码，不要想当然地实现**：
-   - RL4CO_Integration/solve_p21_fixed.py（成功的P21求解器）
-   - RL4CO_Integration/routefinder/test.py（官方测试代码）
-   - 所有推理逻辑、数据格式、模型选择都必须参照这两个文件
-2. **推理逻辑（严格按照官方方式）**：
-   - 推理方式：policy(td_reset, env, phase="test", num_starts=1, return_actions=True, decode_type="sampling")
-   - 一次调用完成整个解码过程，不要循环调用policy
-   - 参照solve_p21_fixed.py的sample_depot_solutions函数
-3. **模型选择（根据约束类型）**：
-   - 只有容量约束（max_distance=0）：使用rf-pomo
-   - 只有距离约束（capacity很大）：使用rf-pomo
-   - **同时有容量和距离约束（max_distance>0且capacity有限）：使用rf-moe（多任务模型）**
-   - P01-P08中，部分实例同时具有容量和距离约束，必须正确识别
-4. **npz格式（必须与solve_p21_fixed.py完全一致）**：
-   - 先归一化坐标，再构建locs
-   - vehicle_capacity是单车容量（归一化后），不是总容量
-   - 需求也要归一化
-   - 参照solve_p21_fixed.py的create_npz_for_depot函数
 """
 
 import os
@@ -46,20 +26,8 @@ sys.path.insert(0, str(RL4CO_PATH / "routefinder"))
 
 
 class GAMDVRPRLHybrid:
-    """
-    GA-MDVRP + RouteFinder 混合求解器
-    """
-    
     def __init__(self, rl_seed_ratio=0.2, num_rl_samples=20, use_gpu=True, model_type='auto'):
-        """
-        初始化混合求解器
-        
-        Args:
-            rl_seed_ratio: RL生成的种子占总种群的比例（默认20%）
-            num_rl_samples: 每个depot的RL采样数量（默认20）
-            use_gpu: 是否使用GPU进行RL推理
-            model_type: 模型类型选择 ('auto', 'rf-pomo', 'rf-moe', 'rf-transformer', 'mtpomo', 'mvmoe')
-        """
+
         self.rl_seed_ratio = rl_seed_ratio
         self.num_rl_samples = num_rl_samples
         self.use_gpu = use_gpu
@@ -69,32 +37,11 @@ class GAMDVRPRLHybrid:
         self.rl4co_path = RL4CO_PATH
         self.ga_mdvrp_path = Path(__file__).parent.parent.parent / "ga_mdvrp_reproduction" / "GA-MDVRP"
         
-        # 检查环境
-        self._check_environment()
-        
         print(f"[Hybrid Solver] 初始化完成")
         print(f"  RL种子比例: {rl_seed_ratio*100:.0f}%")
         print(f"  RL采样数: {num_rl_samples}")
         print(f"  使用GPU: {use_gpu}")
         print(f"  模型选择: {model_type}")
-    
-    def _check_environment(self):
-        """检查运行环境"""
-        # 检查RouteFinder
-        routefinder_path = self.rl4co_path / "routefinder"
-        if not routefinder_path.exists():
-            raise RuntimeError(f"RouteFinder未找到: {routefinder_path}")
-        
-        # 检查GA-MDVRP
-        if not self.ga_mdvrp_path.exists():
-            raise RuntimeError(f"GA-MDVRP未找到: {self.ga_mdvrp_path}")
-        
-        # 检查Java编译
-        bin_dir = self.ga_mdvrp_path / "bin"
-        if not bin_dir.exists():
-            raise RuntimeError(f"GA-MDVRP未编译，请先编译Java代码")
-        
-        print(f"[Hybrid Solver] 环境检查通过")
     
     def solve(self, instance_data: Dict) -> Dict:
         """
@@ -663,15 +610,11 @@ class GAMDVRPRLHybrid:
         import re
         routes = []
         
-        print(f"\n[DEBUG] 开始从标准输出提取路径")
-        
         try:
             # 使用与ga_mdvrp_java.py相同的模式
             # 格式: "Depot1: [4, 18, 25] - [42, 19, 40]"
             pattern_depot_routes = r'Depot(\d+):\s*(.+?)(?=\s*Depot|\Z)'
             depot_matches = re.findall(pattern_depot_routes, output, re.DOTALL)
-            
-            print(f"[DEBUG] 找到 {len(depot_matches)} 个depot")
             
             if depot_matches:
                 for depot_id_str, routes_str in depot_matches:
@@ -682,8 +625,6 @@ class GAMDVRPRLHybrid:
                     # 提取所有方括号中的内容（每个方括号是一辆车）
                     route_pattern = r'\[([^\]]+)\]'
                     route_matches = re.findall(route_pattern, routes_str_clean)
-                    
-                    print(f"[DEBUG] Depot {depot_id_str} 找到 {len(route_matches)} 辆车的路径")
                     
                     for vehicle_idx, route_str in enumerate(route_matches):
                         customer_ids = [int(c.strip()) for c in route_str.split(',') if c.strip()]
@@ -697,16 +638,14 @@ class GAMDVRPRLHybrid:
                                 'cost': 0
                             })
                 
-                print(f"[INFO] 成功提取到 {len(routes)} 条路径")
+                print(f"[INFO] 从标准输出提取到 {len(routes)} 条路径")
             else:
-                print(f"[WARNING] 未能匹配到 'Depot X: [...]' 格式")
-                
                 # 备用方案: 尝试 "Depot 1 has customers: [2, 1, 3]" 格式
                 pattern_depot_customers = r'Depot\s+(\d+)\s+has\s+customers:\s*\[([^\]]+)\]'
                 matches = re.findall(pattern_depot_customers, output)
                 
                 if matches:
-                    print(f"[WARNING] 使用备用格式，将所有客户作为一条路径")
+                    print(f"[WARNING] 使用备用格式提取路径（不区分车辆）")
                     for depot_id_str, customers_str in matches:
                         depot_id = int(depot_id_str) - 1
                         customer_ids = [int(c.strip()) for c in customers_str.split(',') if c.strip()]
@@ -721,6 +660,8 @@ class GAMDVRPRLHybrid:
                             })
                     
                     print(f"[INFO] 使用备用模式提取到 {len(routes)} 条路径")
+                else:
+                    print(f"[ERROR] 无法从标准输出提取路径")
                     
         except Exception as e:
             print(f"[ERROR] 提取路径时出错: {e}")
@@ -739,41 +680,3 @@ class GAMDVRPRLHybrid:
                     pass
 
 
-# 测试代码
-if __name__ == '__main__':
-    print("测试 GA-MDVRP + RouteFinder 混合求解器\n")
-    
-    # 使用P21数据测试
-    p21_path = Path(__file__).parent.parent.parent.parent / "MDVRP-Instances" / "dat" / "p21"
-    
-    if p21_path.exists():
-        print(f"使用P21数据集: {p21_path}")
-        
-        # 读取P21数据（简化版）
-        # 实际使用时应该通过ga_mdvrp_java.py解析
-        instance_data = {
-            'depots': [
-                {'x': 30, 'y': 40, 'vehicle_count': 5, 'capacity': 200}
-            ],
-            'customers': [
-                {'x': 37, 'y': 52, 'demand': 7},
-                {'x': 49, 'y': 49, 'demand': 30},
-                # ... 更多客户
-            ]
-        }
-        
-        try:
-            solver = GAMDVRPRLHybrid(rl_seed_ratio=0.2, num_rl_samples=20)
-            result = solver.solve(instance_data)
-            
-            print("\n最终结果:")
-            print(f"  算法: {result['algorithm']}")
-            print(f"  总成本: {result['total_cost']:.2f}")
-            print(f"  计算时间: {result['compute_time']:.2f}秒")
-            
-        except Exception as e:
-            print(f"\n测试失败: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        print(f"P21数据集未找到: {p21_path}")

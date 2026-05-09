@@ -131,7 +131,7 @@ class ReplanRequest:
     routes: List[RouteInput]
     blocked_edges: List[BlockedEdgeInput]
     vehicle_positions: Optional[Dict[int, int]] = None  # {vehicle_id: customer_id}
-    algorithm: str = "GA"
+    algorithm: str = "genetic"
     params: Optional[Dict] = None
 
 

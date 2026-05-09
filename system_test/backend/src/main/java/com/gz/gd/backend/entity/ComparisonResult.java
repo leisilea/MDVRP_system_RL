@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
  * 算法比较结果实体
  * Algorithm Comparison Result Entity
  */
+// 预留,并未使用
 @Data
 @TableName("comparison_result")
 public class ComparisonResult {

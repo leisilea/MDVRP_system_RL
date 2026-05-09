@@ -8,6 +8,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+//  配置超时时间
 @Configuration
 public class RestTemplateConfig {
     

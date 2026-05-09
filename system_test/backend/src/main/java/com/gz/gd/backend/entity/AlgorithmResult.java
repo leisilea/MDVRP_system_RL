@@ -11,6 +11,7 @@ import java.math.BigDecimal;
  * 单个算法执行结果实体
  * Individual Algorithm Execution Result Entity
  */
+// 预留,目前并未使用
 @Data
 @TableName("algorithm_result")
 public class AlgorithmResult {

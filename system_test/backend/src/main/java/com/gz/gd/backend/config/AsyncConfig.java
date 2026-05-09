@@ -8,6 +8,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
+
+// 多线程配置,用于异步执行算法任务
 @Configuration
 @EnableAsync
 public class AsyncConfig {
@@ -28,14 +30,14 @@ public class AsyncConfig {
         // 线程名称前缀
         executor.setThreadNamePrefix("algorithm-task-");
         
-        // 拒绝策略：由调用线程处理
+        // 拒绝策略：由http本调用线程处理
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         
         // 等待所有任务完成后再关闭线程池
         executor.setWaitForTasksToCompleteOnShutdown(true);
         
         // 等待时间
-        executor.setAwaitTerminationSeconds(60);
+        executor.setAwaitTerminationSeconds(600);
         
         executor.initialize();
         return executor;

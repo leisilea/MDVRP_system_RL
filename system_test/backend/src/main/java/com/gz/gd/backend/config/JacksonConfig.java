@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+// Json序列化配置 + 统一Json格式的日期标准
 @Configuration
 public class JacksonConfig {
     
