@@ -1,7 +1,7 @@
 """
-Cordeau MDVRP Instance Parser
+Cordeau MDVRP 实例解析器
 
-Parses Cordeau format MDVRP instance files into MDVRPInstance objects.
+将 Cordeau 格式的 MDVRP 实例文件解析为 MDVRPInstance 对象
 """
 
 from dataclasses import dataclass
@@ -12,7 +12,7 @@ import numpy as np
 
 @dataclass
 class MDVRPInstance:
-    """MDVRP instance data container"""
+    """MDVRP 实例数据容器"""
     name: str
     num_depots: int
     num_customers: int
@@ -27,13 +27,13 @@ class MDVRPInstance:
 
 def parse_cordeau_mdvrp(file_path: Path) -> Tuple[List[Dict], List[Dict], int, List[float], List[float]]:
     """
-    Parse Cordeau MDVRP file format
+    解析 Cordeau MDVRP 文件格式
     
-    Args:
-        file_path: Path to Cordeau format file
+    参数:
+        file_path: Cordeau 格式文件路径
         
-    Returns:
-        Tuple of (depots, customers, vehicles_per_depot, d_vals, q_vals)
+    返回:
+        元组 (depots, customers, vehicles_per_depot, d_vals, q_vals)
     """
     lines = [line.strip() for line in file_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     if not lines:
@@ -51,12 +51,12 @@ def parse_cordeau_mdvrp(file_path: Path) -> Tuple[List[Dict], List[Dict], int, L
     num_customers = int(header[2])
     num_depots = int(header[3])
 
-    # D/Q parameters
+    # D/Q 参数
     dq_rows = [lines[i].split() for i in range(1, 1 + num_depots)]
     d_vals = [float(parts[0]) for parts in dq_rows]
     q_vals = [float(parts[1]) for parts in dq_rows]
 
-    # Customers
+    # 客户数据
     customer_start = 1 + num_depots
     customer_end = customer_start + num_customers
     customers: List[Dict] = []
@@ -71,7 +71,7 @@ def parse_cordeau_mdvrp(file_path: Path) -> Tuple[List[Dict], List[Dict], int, L
             "demand": float(parts[4]),
         })
 
-    # Depots
+    # 仓库数据
     depots: List[Dict] = []
     depot_start = customer_end
     for idx, i in enumerate(range(depot_start, depot_start + num_depots)):
@@ -93,13 +93,13 @@ def parse_cordeau_mdvrp(file_path: Path) -> Tuple[List[Dict], List[Dict], int, L
 
 def load_cordeau_instance(file_path: str) -> MDVRPInstance:
     """
-    Load Cordeau format MDVRP instance
+    加载 Cordeau 格式的 MDVRP 实例
     
-    Args:
-        file_path: Path to Cordeau format file
+    参数:
+        file_path: Cordeau 格式文件路径
         
-    Returns:
-        MDVRPInstance object
+    返回:
+        MDVRPInstance 对象
     """
     path = Path(file_path)
     depots, customers, vehicles_per_depot, d_vals, q_vals = parse_cordeau_mdvrp(path)
@@ -107,7 +107,7 @@ def load_cordeau_instance(file_path: str) -> MDVRPInstance:
     num_depots = len(depots)
     num_customers = len(customers)
     
-    # Convert to numpy arrays
+    # 转换为 numpy 数组
     depots_coords = np.array([[d['x'], d['y']] for d in depots])
     customers_coords = np.array([[c['x'], c['y']] for c in customers])
     demands = np.array([c['demand'] for c in customers])
@@ -115,7 +115,7 @@ def load_cordeau_instance(file_path: str) -> MDVRPInstance:
     depot_vehicles = np.array([d['vehicles'] for d in depots])
     max_route_distances = np.array([d['maxDistance'] for d in depots])
     
-    # Calculate distance matrix
+    # 计算距离矩阵
     all_coords = np.vstack([depots_coords, customers_coords])
     diff = all_coords[:, np.newaxis, :] - all_coords[np.newaxis, :, :]
     distance_matrix = np.sqrt(np.sum(diff**2, axis=-1))

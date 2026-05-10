@@ -1,8 +1,8 @@
 """
-Performance benchmark for VPRL-GA integration
+VPRL-GA 集成的性能基准测试
 
-This script provides a simple benchmark framework for testing VPRL performance.
-Note: Actual benchmarking requires trained RL4CO models and GA_Java setup.
+此脚本提供了一个简单的基准测试框架,用于测试 VPRL 性能。
+注意: 实际的基准测试需要训练好的 RL4CO 模型和 GA_Java 环境设置。
 """
 
 import os
@@ -21,22 +21,22 @@ from config import VPRLConfig
 
 @dataclass
 class BenchmarkResult:
-    """Benchmark result for a single instance"""
+    """单个实例的基准测试结果"""
     instance_name: str
     num_customers: int
     num_depots: int
     
-    # Timing
+    # 时间统计
     vrpl_time: float
     conversion_time: float
     ga_time: float
     total_time: float
     
-    # Quality
+    # 质量统计
     final_cost: float
     oversampling_improvement: float
     
-    # Sampling
+    # 采样统计
     num_samples_generated: int
     num_solutions_kept: int
 
@@ -47,15 +47,15 @@ def create_benchmark_config(
     oversampling_ratio: float = 1.2
 ) -> VPRLConfig:
     """
-    Create configuration for benchmarking
+    创建基准测试配置
     
-    Args:
-        enable_vrpl: Whether to enable VRPL
-        num_solutions: Number of solutions to generate
-        oversampling_ratio: Oversampling ratio
+    参数:
+        enable_vrpl: 是否启用 VRPL
+        num_solutions: 生成的解数量
+        oversampling_ratio: 过采样比例
         
-    Returns:
-        VPRLConfig instance
+    返回:
+        VPRLConfig 实例
     """
     return VPRLConfig(
         enable_vrpl=enable_vrpl,
@@ -70,52 +70,52 @@ def benchmark_instance(
     config: VPRLConfig
 ) -> BenchmarkResult:
     """
-    Benchmark a single instance
+    对单个实例进行基准测试
     
-    Args:
-        instance_path: Path to instance file
-        config: VPRL configuration
+    参数:
+        instance_path: 实例文件路径
+        config: VPRL 配置
         
-    Returns:
+    返回:
         BenchmarkResult
         
-    Note:
-        This is a placeholder. Actual implementation requires:
-        - Trained RL4CO models
-        - GA_Java setup
-        - Instance loading from Cordeau format
+    注意:
+        这是一个占位符实现。实际实现需要:
+        - 训练好的 RL4CO 模型
+        - GA_Java 环境设置
+        - 从 Cordeau 格式加载实例
     """
     print(f"\nBenchmarking: {os.path.basename(instance_path)}")
     print(f"  VRPL enabled: {config.enable_vrpl}")
     print(f"  Solutions needed: {config.num_solutions_needed}")
     print(f"  Oversampling ratio: {config.oversampling_ratio}")
     
-    # Placeholder timing
+    # 占位符时间统计
     vrpl_time = 0.0
     conversion_time = 0.0
     ga_time = 0.0
     
     if config.enable_vrpl:
-        # Simulate VRPL generation time
+        # 模拟 VRPL 生成时间
         num_samples = int(config.num_solutions_needed * config.oversampling_ratio)
-        vrpl_time = num_samples * 0.1  # ~0.1s per sample (placeholder)
-        conversion_time = 0.05  # Placeholder
+        vrpl_time = num_samples * 0.1  # 每个样本约 0.1 秒(占位符)
+        conversion_time = 0.05  # 占位符
     
-    # Simulate GA time
-    ga_time = 25.0  # Placeholder
+    # 模拟 GA 时间
+    ga_time = 25.0  # 占位符
     
     total_time = vrpl_time + conversion_time + ga_time
     
     result = BenchmarkResult(
         instance_name=os.path.basename(instance_path),
-        num_customers=50,  # Placeholder
-        num_depots=4,  # Placeholder
+        num_customers=50,  # 占位符
+        num_depots=4,  # 占位符
         vrpl_time=vrpl_time,
         conversion_time=conversion_time,
         ga_time=ga_time,
         total_time=total_time,
-        final_cost=580.0,  # Placeholder
-        oversampling_improvement=7.5,  # Placeholder
+        final_cost=580.0,  # 占位符
+        oversampling_improvement=7.5,  # 占位符
         num_samples_generated=int(config.num_solutions_needed * config.oversampling_ratio),
         num_solutions_kept=config.num_solutions_needed
     )
@@ -132,27 +132,27 @@ def benchmark_instance(
 
 def compare_with_without_vrpl(instance_path: str) -> Dict:
     """
-    Compare performance with and without VRPL
+    比较使用和不使用 VRPL 的性能
     
-    Args:
-        instance_path: Path to instance file
+    参数:
+        instance_path: 实例文件路径
         
-    Returns:
-        Dictionary with comparison results
+    返回:
+        包含比较结果的字典
     """
     print("\n" + "="*60)
     print("Comparison: With vs Without VRPL")
     print("="*60)
     
-    # Benchmark without VRPL
+    # 不使用 VRPL 的基准测试
     config_no_vrpl = create_benchmark_config(enable_vrpl=False)
     result_no_vrpl = benchmark_instance(instance_path, config_no_vrpl)
     
-    # Benchmark with VRPL
+    # 使用 VRPL 的基准测试
     config_with_vrpl = create_benchmark_config(enable_vrpl=True)
     result_with_vrpl = benchmark_instance(instance_path, config_with_vrpl)
     
-    # Calculate overhead
+    # 计算开销
     vrpl_overhead = (result_with_vrpl.total_time - result_no_vrpl.total_time) / result_no_vrpl.total_time * 100
     
     print("\n" + "="*60)
@@ -172,13 +172,13 @@ def compare_with_without_vrpl(instance_path: str) -> Dict:
 
 def test_oversampling_ratios(instance_path: str) -> List[BenchmarkResult]:
     """
-    Test different oversampling ratios
+    测试不同的过采样比例
     
-    Args:
-        instance_path: Path to instance file
+    参数:
+        instance_path: 实例文件路径
         
-    Returns:
-        List of benchmark results
+    返回:
+        基准测试结果列表
     """
     print("\n" + "="*60)
     print("Testing Different Oversampling Ratios")
@@ -212,10 +212,10 @@ def test_oversampling_ratios(instance_path: str) -> List[BenchmarkResult]:
 
 def print_summary(results: List[BenchmarkResult]):
     """
-    Print summary of benchmark results
+    打印基准测试结果摘要
     
-    Args:
-        results: List of benchmark results
+    参数:
+        results: 基准测试结果列表
     """
     print("\n" + "="*60)
     print("Benchmark Summary")
@@ -228,7 +228,7 @@ def print_summary(results: List[BenchmarkResult]):
         print(f"{result.instance_name:<15} {result.num_customers:<12} "
               f"{result.vrpl_time:<10.2f} {result.ga_time:<10.2f} {result.total_time:<10.2f}")
     
-    # Calculate averages
+    # 计算平均值
     avg_vrpl = np.mean([r.vrpl_time for r in results])
     avg_ga = np.mean([r.ga_time for r in results])
     avg_total = np.mean([r.total_time for r in results])
@@ -241,14 +241,14 @@ def print_summary(results: List[BenchmarkResult]):
 
 def main():
     """
-    Main benchmark function
+    主基准测试函数
     
-    Note:
-        This is a demonstration script. For actual benchmarking:
-        1. Train RL4CO models for different instance sizes
-        2. Set up GA_Java environment
-        3. Prepare Cordeau instance files
-        4. Update instance paths below
+    注意:
+        这是一个演示脚本。实际的基准测试需要:
+        1. 为不同实例规模训练 RL4CO 模型
+        2. 设置 GA_Java 环境
+        3. 准备 Cordeau 实例文件
+        4. 更新下面的实例路径
     """
     print("\n" + "="*60)
     print("VPRL Performance Benchmark")
@@ -259,14 +259,14 @@ def main():
     print("  2. GA_Java setup")
     print("  3. Cordeau instance files")
     
-    # Placeholder instance paths
+    # 占位符实例路径
     instances = [
         "data/p01.dat",
         "data/p03.dat",
         "data/p04.dat"
     ]
     
-    # Test 1: Basic benchmark
+    # 测试 1: 基本基准测试
     print("\n" + "="*60)
     print("Test 1: Basic Benchmark")
     print("="*60)
@@ -280,14 +280,14 @@ def main():
     
     print_summary(results)
     
-    # Test 2: With vs Without VRPL
+    # 测试 2: 使用与不使用 VRPL 的对比
     print("\n" + "="*60)
     print("Test 2: With vs Without VRPL")
     print("="*60)
     
     comparison = compare_with_without_vrpl(instances[0])
     
-    # Test 3: Different oversampling ratios
+    # 测试 3: 不同的过采样比例
     print("\n" + "="*60)
     print("Test 3: Oversampling Ratios")
     print("="*60)

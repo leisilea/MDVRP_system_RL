@@ -90,6 +90,10 @@ class MDVRPSolver:
         self.depot_id_map = {i: d['id'] for i, d in enumerate(depots)}
         self.customer_id_map = {i: c['id'] for i, c in enumerate(customers)}
         
+        # 调试：打印 ID 映射
+        print(f"[DEBUG] Depot ID 映射: {self.depot_id_map}")
+        print(f"[DEBUG] Customer ID 映射 (前5个): {dict(list(self.customer_id_map.items())[:5])}")
+        
         # 转换为MDVRPInstance格式
         self.instance = self._convert_to_instance()
         
@@ -264,7 +268,6 @@ class GAMDVRPRLHybridSolver(MDVRPSolver):
         
         # 创建混合求解器
         hybrid_solver = GAMDVRPRLHybrid(
-            rl_seed_ratio=self.params.get('rl_seed_ratio', 0.2),
             num_rl_samples=self.params.get('num_rl_samples', 20),
             use_gpu=self.params.get('use_gpu', True),
             model_type=self.params.get('model_type', 'auto')
@@ -276,8 +279,18 @@ class GAMDVRPRLHybridSolver(MDVRPSolver):
         # 格式转换
         routes = []
         for route in result.get('routes', []):
-            depot_id = self.depot_id_map.get(route.get('depot_id', 0), route.get('depot_id', 0))
-            customers = [self.customer_id_map.get(c, c) for c in route.get('customers', [])]
+            depot_id_0indexed = route.get('depot_id', 0)
+            customers_0indexed = route.get('customers', [])
+            
+            # 转换为实际 ID
+            depot_id = self.depot_id_map.get(depot_id_0indexed, depot_id_0indexed)
+            customers = [self.customer_id_map.get(c, c) for c in customers_0indexed]
+            
+            # 调试：打印转换信息（仅第一条路径）
+            if len(routes) == 0:
+                print(f"[DEBUG] 第一条路径转换:")
+                print(f"  depot_id: {depot_id_0indexed} -> {depot_id}")
+                print(f"  customers (前3个): {customers_0indexed[:3]} -> {customers[:3]}")
             
             routes.append({
                 'vehicleId': route.get('vehicle_id', 0),
@@ -296,9 +309,58 @@ class GAMDVRPRLHybridSolver(MDVRPSolver):
         }
 
 
-class GAMDVRPJavaSolver(GeneticAlgorithmSolver):
-    """GA-MDVRP Java 版本求解器（Ombuki-Berman 2009）- 与GeneticAlgorithmSolver相同"""
-    pass
+class AntColonySolver(MDVRPSolver):
+    """蚁群算法求解器 (Ant Colony Optimization)"""
+
+    def solve(self):
+        """
+        使用蚁群算法求解 MDVRP
+
+        Returns:
+            dict: {
+                'routes': [...],
+                'totalCost': float,
+                'computeTime': float,
+                'numRoutes': int,
+                'algorithm': str,
+                'convergence': []
+            }
+        """
+        try:
+            from . import aco
+        except ImportError:
+            import aco
+        
+        # 委托给 aco 模块的实现
+        solver = aco.AntColonySolver(self.depots, self.customers, self.params)
+        return solver.solve()
+
+
+class ParticleSwarmSolver(MDVRPSolver):
+    """粒子群算法求解器 (Particle Swarm Optimization)"""
+
+    def solve(self):
+        """
+        使用粒子群算法求解 MDVRP
+
+        Returns:
+            dict: {
+                'routes': [...],
+                'totalCost': float,
+                'computeTime': float,
+                'numRoutes': int,
+                'algorithm': str,
+                'convergence': []
+            }
+        """
+        try:
+            from . import pso
+        except ImportError:
+            import pso
+        
+        # 委托给 pso 模块的实现
+        solver = pso.ParticleSwarmSolver(self.depots, self.customers, self.params)
+        return solver.solve()
 
 
 def create_solver(depots, customers, params):
@@ -312,25 +374,25 @@ def create_solver(depots, customers, params):
     
     Returns:
         MDVRPSolver: 求解器实例
+    
+    Raises:
+        ValueError: 不支持的算法类型
     """
     algorithm = params.get('algorithm', 'genetic')
     
-    if algorithm == 'genetic':
-        # GA算法 - 使用Java版本 (Ombuki-Berman 2009)
-        return GeneticAlgorithmSolver(depots, customers, params)
-    elif algorithm == 'ga_multiprogramming':
-        # 多进程遗传算法 - 使用Python版本
-        return GAMultiprogrammingSolver(depots, customers, params)
-    elif algorithm == 'ACO':
-        # 蚁群算法 (Ant Colony Optimization)
-        from . import aco
-        return aco.AntColonySolver(depots, customers, params)
-    elif algorithm == 'PSO':
-        # 粒子群算法 (Particle Swarm Optimization)
-        from . import pso
-        return pso.ParticleSwarmSolver(depots, customers, params)
-    elif algorithm == 'GA_RL_HYBRID':
-        # GA-MDVRP + RouteFinder 混合求解器
-        return GAMDVRPRLHybridSolver(depots, customers, params)
-    else:
-        raise ValueError(f"不支持的算法类型: {algorithm}，支持的算法: genetic, ga_multiprogramming, ACO, PSO, GA_RL_HYBRID")
+    # 求解器映射表
+    solver_map = {
+        'genetic': GeneticAlgorithmSolver,
+        'ga_multiprogramming': GAMultiprogrammingSolver,
+        'GA_RL_HYBRID': GAMDVRPRLHybridSolver,
+        'ACO': AntColonySolver,
+        'PSO': ParticleSwarmSolver,
+    }
+    
+    solver_class = solver_map.get(algorithm)
+    
+    if solver_class is None:
+        supported = ', '.join(solver_map.keys())
+        raise ValueError(f"不支持的算法类型: {algorithm}，支持的算法: {supported}")
+    
+    return solver_class(depots, customers, params)

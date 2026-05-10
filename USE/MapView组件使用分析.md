@@ -94,7 +94,7 @@ const mapViewRef = ref(null)
 
 ##### **场景1: 场景选择变化时**
 ```javascript
-const handleScenarioChange = async (scenarioId) => {
+const   = async (scenarioId) => {
   selectedScenario.value = scenarioList.value.find(s => s.id === scenarioId)
   selectedAlgorithm.value = ''
   solution.value = null

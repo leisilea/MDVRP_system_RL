@@ -1,5 +1,5 @@
 """
-Basic usage example for VPRL-Enhanced GA solver
+VPRL 增强 GA 求解器的基本使用示例
 """
 
 import sys
@@ -12,22 +12,22 @@ from VPRL import VPRLSampler, VPRLConfig
 
 
 def main():
-    """Basic usage example"""
+    """基本使用示例"""
     
     print("="*60)
     print("VPRL-Enhanced GA Solver - Basic Usage Example")
     print("="*60)
     
-    # Method 1: Use default configuration
+    # 方法 1: 使用默认配置
     print("\n1. Using default configuration:")
     sampler = VPRLSampler()
     
-    # Method 2: Load from config file
+    # 方法 2: 从配置文件加载
     print("\n2. Loading from config file:")
     config = VPRLConfig.from_file("VPRL/config.json")
     sampler = VPRLSampler(config=config)
     
-    # Method 3: Custom configuration
+    # 方法 3: 自定义配置
     print("\n3. Using custom configuration:")
     config = VPRLConfig(
         model_path="models/vrpl_cvrp100.ckpt",
@@ -42,7 +42,7 @@ def main():
     )
     sampler = VPRLSampler(config=config)
     
-    # Load MDVRP instance
+    # 加载 MDVRP 实例
     print("\n4. Loading MDVRP instance:")
     instance_file = "MDVRP-Instances/dat/p01"
     
@@ -51,7 +51,7 @@ def main():
         print("Please ensure MDVRP-Instances directory exists")
         return
     
-    # Solve with VRPL enhancement
+    # 使用 VRPL 增强求解
     print("\n5. Solving with VRPL enhancement:")
     result = sampler.solve(
         instance_data=instance_file,
@@ -60,7 +60,7 @@ def main():
         vrpl_ratio=0.5
     )
     
-    # Display results
+    # 显示结果
     print("\n" + "="*60)
     print("Results:")
     print("="*60)
@@ -68,7 +68,7 @@ def main():
     print(f"Compute time: {result['compute_time']:.2f}s")
     print(f"Number of routes: {result['num_vehicles']}")
     
-    # Display performance metrics
+    # 显示性能指标
     if result['performance_metrics']:
         metrics = result['performance_metrics']
         print(f"\nPerformance Metrics:")
@@ -81,10 +81,10 @@ def main():
         print(f"  Valid solutions: {metrics.num_valid_solutions}")
         print(f"  Invalid solutions: {metrics.num_invalid_solutions}")
         
-        # Display convergence curve
+        # 显示收敛曲线
         if metrics.convergence_curve:
             print(f"\nConvergence curve ({len(metrics.convergence_curve)} points):")
-            for point in metrics.convergence_curve[:5]:  # Show first 5
+            for point in metrics.convergence_curve[:5]:  # 显示前 5 个点
                 print(f"  Generation {point.generation}: {point.best_cost:.2f} "
                       f"(at {point.timestamp:.1f}s)")
             if len(metrics.convergence_curve) > 5:

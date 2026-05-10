@@ -231,7 +231,6 @@ def run_hybrid_solver_single(problem_name: str, instance_data: Dict, run_id: int
     print(f"{'='*70}")
     
     solver = GAMDVRPRLHybrid(
-        rl_seed_ratio=0.2,
         num_rl_samples=20,
         use_gpu=True,
         model_type='auto'

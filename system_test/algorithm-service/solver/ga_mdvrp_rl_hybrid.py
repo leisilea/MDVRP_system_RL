@@ -1,15 +1,3 @@
-"""
-GA-MDVRP + RouteFinder 混合求解器
-实现完整的工作流：前端数据 → Java GA → RL初始化 → GA优化
-
-工作流程:
-1. 前端数据通过 ga_mdvrp_java.py 解析
-2. Java GA 进行仓库分割（depot assignment）
-3. 生成初始种群：80% 随机 + 20% RL生成
-4. RL部分：将分割后的子问题转换为npz → RouteFinder推理 → 转回GA格式
-5. 合并初始种群并运行GA优化
-"""
-
 import os
 import sys
 import json
@@ -26,9 +14,8 @@ sys.path.insert(0, str(RL4CO_PATH / "routefinder"))
 
 
 class GAMDVRPRLHybrid:
-    def __init__(self, rl_seed_ratio=0.2, num_rl_samples=20, use_gpu=True, model_type='auto'):
+    def __init__(self, num_rl_samples=20, use_gpu=True, model_type='auto'):
 
-        self.rl_seed_ratio = rl_seed_ratio
         self.num_rl_samples = num_rl_samples
         self.use_gpu = use_gpu
         self.model_type = model_type
@@ -38,21 +25,11 @@ class GAMDVRPRLHybrid:
         self.ga_mdvrp_path = Path(__file__).parent.parent.parent / "ga_mdvrp_reproduction" / "GA-MDVRP"
         
         print(f"[Hybrid Solver] 初始化完成")
-        print(f"  RL种子比例: {rl_seed_ratio*100:.0f}%")
-        print(f"  RL采样数: {num_rl_samples}")
+        print(f"  RL种子数: {num_rl_samples}")
         print(f"  使用GPU: {use_gpu}")
         print(f"  模型选择: {model_type}")
     
     def solve(self, instance_data: Dict) -> Dict:
-        """
-        求解MDVRP实例（混合方法）
-        
-        Args:
-            instance_data: 包含depots和customers的字典
-            
-        Returns:
-            求解结果字典
-        """
         start_time = time.time()
         
         print(f"\n{'='*70}")
@@ -92,12 +69,7 @@ class GAMDVRPRLHybrid:
         return result
     
     def _assign_customers_to_depots(self, instance_data: Dict) -> Dict:
-        """
-        将客户分配到最近的仓库（贪心策略）
-        
-        Returns:
-            depot_assignments: {depot_idx: [customer_indices]}
-        """
+        # 贪心分配
         depots = instance_data['depots']
         customers = instance_data['customers']
         
@@ -129,16 +101,12 @@ class GAMDVRPRLHybrid:
     
     def _select_model(self, instance_data: Dict, depot_assignments: Dict) -> Tuple[str, str]:
         """
-        根据问题特征自动选择合适的模型
-        
-        【重要】参照官方文档和成功的P21代码：
+        根据问题特征自动选择合适的模型 
+    
         - 模型规模：根据平均客户数选择50或100
         - 模型类型：根据约束类型选择
-          * 只有容量约束：rf-pomo
-          * 只有距离约束：rf-pomo
-          * **同时有容量和距离约束：rf-moe（多任务模型）**
-        
-        关键修复：正确识别同时有两种约束的情况
+          * 只有容量或距离约束：rf-pomo
+          * 同时有容量和距离约束：rf-moe
         
         Returns:
             (model_size, model_type): 例如 ('100', 'rf-pomo')
@@ -166,23 +134,11 @@ class GAMDVRPRLHybrid:
         if self.model_type != 'auto':
             model_type = self.model_type
         else:
-            # 自动选择策略（参照官方文档，关键修复）
+            # 自动选择策略：双约束用MoE，其他用POMO
             if has_distance_constraint and has_capacity_constraint:
-                # 两种约束都有：使用MoE模型（多任务学习）
                 model_type = 'rf-moe'
-                print(f"  [模型选择] 检测到同时有距离约束(max_distance={max_distance})和容量约束 → 使用rf-moe")
-            elif has_distance_constraint:
-                # 只有距离约束：使用POMO
-                model_type = 'rf-pomo'
-                print(f"  [模型选择] 只有距离约束(max_distance={max_distance}) → 使用rf-pomo")
-            elif has_capacity_constraint:
-                # 只有容量约束：使用标准POMO
-                model_type = 'rf-pomo'
-                print(f"  [模型选择] 只有容量约束 → 使用rf-pomo")
             else:
-                # 无约束或约束不明确：使用标准POMO
                 model_type = 'rf-pomo'
-                print(f"  [模型选择] 无明确约束 → 使用rf-pomo")
         
         print(f"  问题特征分析:")
         print(f"    平均客户数/depot: {avg_customers_per_depot:.1f}")
@@ -193,19 +149,15 @@ class GAMDVRPRLHybrid:
         return model_size, model_type
     
     def _generate_rl_seeds(self, instance_data: Dict, depot_assignments: Dict) -> List[Dict]:
-        """
-        使用RouteFinder为每个depot生成种子解
-        
-        Returns:
-            List of solutions, each containing depot-wise routes
-        """
+        # 生成种子解
         import torch
         from routefinder.envs import MTVRPEnv
         from routefinder.models import RouteFinderBase, RouteFinderMoE
         from routefinder.models.baselines.mtpomo import MTPOMO
         from routefinder.models.baselines.mvmoe import MVMoE
         
-        # TorchRL兼容性修复
+        # TorchRL兼容性修复(由于RouteFinder给予的版本和它自己的RL4CO框架版本都有所冲突,所以需要进行兼容性修复,
+        # 很奇怪,但是test.py里确实是这么做的,没有正常的办法能够解决冲突)
         import torchrl.data.tensor_specs as specs
         if not hasattr(specs, 'CompositeSpec'):
             specs.CompositeSpec = specs.Composite
@@ -248,11 +200,6 @@ class GAMDVRPRLHybrid:
         policy = model.policy.to(device)
         policy.eval()
         
-        # 验证policy在正确的设备上
-        print(f"  Policy设备验证:")
-        for name, param in list(policy.named_parameters())[:3]:
-            print(f"    {name}: {param.device}")
-        
         print(f"  [INFO] 模型加载完成，开始为每个depot生成解...")
         
         # 为每个depot生成解
@@ -294,7 +241,7 @@ class GAMDVRPRLHybrid:
         """
         为单个depot创建npz文件（MTVRPEnv格式）
         
-        关键修复：参照solve_p21_fixed.py的正确格式
+        (模型只能接受归一化后的文件,并且结果也不能看成本,只能路径返回)
         - 正确归一化坐标（先归一化再构建locs）
         - vehicle_capacity是单车容量（归一化后），不是总容量
         - 需求也要归一化
@@ -331,11 +278,10 @@ class GAMDVRPRLHybrid:
         demands = np.array([c['demand'] for c in depot_customers], dtype=np.float32).reshape(1, n_customers)
         
         # 归一化需求和容量
-        # 关键：vehicle_capacity是单车容量，不是所有车的总容量
         max_demand = demands.max()
         if max_demand > 0:
             demands_normalized = demands / max_demand
-            capacity_normalized = depot.get('capacity', 60) / max_demand  # 单车容量归一化
+            capacity_normalized = depot.get('capacity', 60) / max_demand  
         else:
             demands_normalized = demands
             capacity_normalized = depot.get('capacity', 60)
@@ -361,13 +307,7 @@ class GAMDVRPRLHybrid:
         return npz_path
     
     def _sample_depot_solutions(self, policy, npz_path: str, device, num_samples: int) -> List[Dict]:
-        """
-        对单个depot使用RouteFinder采样
-        
-        关键修复：参照solve_p21_fixed.py和test.py的正确推理方式
-        - 使用 policy(td_reset, env, phase="test", num_starts=1, return_actions=True, decode_type="sampling")
-        - 不要循环调用policy，一次调用就完成整个解码过程
-        """
+        # 单仓库采样
         import torch
         from routefinder.envs import MTVRPEnv
         
@@ -389,7 +329,6 @@ class GAMDVRPRLHybrid:
                 td_reset = env.reset(td)
                 
                 # 关键修复：使用官方推理方式，一次调用完成整个解码
-                # 参照 solve_p21_fixed.py 和 test.py
                 out = policy(
                     td_reset, 
                     env, 
@@ -412,7 +351,8 @@ class GAMDVRPRLHybrid:
                     'num_vehicles': int(num_vehicles)
                 })
         
-        # 按成本排序
+        # 按成本排序(从小到大)
+        # 作用: 1) 为GA提供质量梯度 2) 便于获取最优解用于日志 3) 为未来"超量生成,选择最优"预留空间
         solutions.sort(key=lambda x: x['cost'])
         
         print(f"    生成 {len(solutions)} 个解，最佳成本: {solutions[0]['cost']:.2f}, 车辆数: {solutions[0]['num_vehicles']}")
@@ -423,7 +363,7 @@ class GAMDVRPRLHybrid:
         """
         将RL种子解转换为GA格式的JSON
         """
-        num_seeds = int(100 * self.rl_seed_ratio)  # 假设种群大小为100
+        num_seeds = self.num_rl_samples
         
         ga_individuals = []
         
@@ -548,7 +488,7 @@ class GAMDVRPRLHybrid:
             
             # 解析结果
             total_cost = self._extract_cost_from_output(result.stdout)
-            routes = self._extract_routes_from_output(result.stdout)
+            routes = self._extract_routes_from_output(result.stdout, instance_data)
             
         finally:
             # 清理问题文件
@@ -602,10 +542,10 @@ class GAMDVRPRLHybrid:
             return float(match.group(1))
         return 0.0
     
-    def _extract_routes_from_output(self, output: str) -> List[Dict]:
+    def _extract_routes_from_output(self, output: str, instance_data: Dict) -> List[Dict]:
         """
         从标准输出中提取路径信息
-        使用与ga_mdvrp_java.py相同的逻辑
+        修复：计算每条路径的实际成本
         """
         import re
         routes = []
@@ -618,7 +558,7 @@ class GAMDVRPRLHybrid:
             
             if depot_matches:
                 for depot_id_str, routes_str in depot_matches:
-                    depot_id = int(depot_id_str) - 1  # 转换为0索引
+                    depot_id = int(depot_id_str) - 1  # Java是1-indexed，转为0-indexed
                     # 清理路径字符串（去掉 | 和多余空白）
                     routes_str_clean = routes_str.replace('|', '').strip()
                     
@@ -627,15 +567,24 @@ class GAMDVRPRLHybrid:
                     route_matches = re.findall(route_pattern, routes_str_clean)
                     
                     for vehicle_idx, route_str in enumerate(route_matches):
+                        # Java输出的是1-indexed客户ID
                         customer_ids = [int(c.strip()) for c in route_str.split(',') if c.strip()]
+                        # 转换为0-indexed
                         customers_0indexed = [c - 1 for c in customer_ids]
                         
                         if customers_0indexed:
+                            # 计算路径成本
+                            cost = self._calculate_route_cost(
+                                depot_id, 
+                                customers_0indexed, 
+                                instance_data
+                            )
+                            
                             routes.append({
-                                'depot_id': depot_id,
+                                'depot_id': depot_id,  # 0-indexed
                                 'vehicle_id': len(routes) + 1,
-                                'customers': customers_0indexed,
-                                'cost': 0
+                                'customers': customers_0indexed,  # 0-indexed
+                                'cost': cost
                             })
                 
                 print(f"[INFO] 从标准输出提取到 {len(routes)} 条路径")
@@ -652,11 +601,18 @@ class GAMDVRPRLHybrid:
                         customers_0indexed = [c - 1 for c in customer_ids]
                         
                         if customers_0indexed:
+                            # 计算路径成本
+                            cost = self._calculate_route_cost(
+                                depot_id, 
+                                customers_0indexed, 
+                                instance_data
+                            )
+                            
                             routes.append({
                                 'depot_id': depot_id,
                                 'vehicle_id': len(routes) + 1,
                                 'customers': customers_0indexed,
-                                'cost': 0
+                                'cost': cost
                             })
                     
                     print(f"[INFO] 使用备用模式提取到 {len(routes)} 条路径")
@@ -669,6 +625,44 @@ class GAMDVRPRLHybrid:
             traceback.print_exc()
         
         return routes
+    
+    def _calculate_route_cost(self, depot_id: int, customers: List[int], instance_data: Dict) -> float:
+        """
+        计算单条路径的成本（欧几里得距离）
+        
+        Args:
+            depot_id: 仓库索引（0-indexed）
+            customers: 客户索引列表（0-indexed）
+            instance_data: 问题实例数据
+        
+        Returns:
+            路径总成本
+        """
+        if not customers:
+            return 0.0
+        
+        depot = instance_data['depots'][depot_id]
+        depot_x, depot_y = depot['x'], depot['y']
+        
+        total_cost = 0.0
+        prev_x, prev_y = depot_x, depot_y
+        
+        # 从仓库到第一个客户，然后依次访问每个客户
+        for cust_idx in customers:
+            customer = instance_data['customers'][cust_idx]
+            cust_x, cust_y = customer['x'], customer['y']
+            
+            # 计算距离
+            dist = np.sqrt((cust_x - prev_x)**2 + (cust_y - prev_y)**2)
+            total_cost += dist
+            
+            prev_x, prev_y = cust_x, cust_y
+        
+        # 从最后一个客户返回仓库
+        dist = np.sqrt((depot_x - prev_x)**2 + (depot_y - prev_y)**2)
+        total_cost += dist
+        
+        return total_cost
     
     def _cleanup(self, *paths):
         """清理临时文件"""

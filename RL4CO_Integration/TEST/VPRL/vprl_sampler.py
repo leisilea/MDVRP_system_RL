@@ -1,7 +1,3 @@
-"""
-VPRL Sampler: Main orchestrator for RL4CO-GA integration
-"""
-
 import os
 import time
 import logging
@@ -9,8 +5,6 @@ import numpy as np
 import torch
 from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
-
-from rl4co.models import POMO
 
 from .config import VPRLConfig
 from .instance_decomposer import InstanceDecomposer, CVRPSubProblem
@@ -20,16 +14,16 @@ from .error_handler import ErrorHandler
 
 @dataclass
 class ConvergencePoint:
-    """Convergence tracking data point"""
+    # 记录当前代数+数据 用来绘制收敛曲线
     generation: int
     best_cost: float
-    timestamp: float  # Seconds since start
+    timestamp: float  
 
 
 @dataclass
 class PerformanceMetrics:
-    """Performance metrics for VPRL-GA integration"""
-    # VRPL metrics
+    """VPRL-GA 集成的性能指标"""
+    # VRPL 指标
     vrpl_generation_time: float
     vrpl_num_samples_generated: int
     vrpl_num_solutions_kept: int
@@ -39,34 +33,33 @@ class PerformanceMetrics:
     oversampling_improvement: float
     model_used: str
     
-    # Conversion metrics
+    # 转换指标
     conversion_time: float
     num_valid_solutions: int
     num_invalid_solutions: int
     
-    # GA_Java metrics
+    # GA_Java 指标
     ga_computation_time: float
     ga_iterations: int
     ga_final_cost: float
     convergence_curve: List[ConvergencePoint]
     
-    # Comparison
+    # 对比
     improvement_vs_random: float
     vrpl_contribution: float
 
 
 class VPRLSampler:
-    """Main orchestrator for VPRL-enhanced GA solving"""
     
     def __init__(self, model_path: Optional[str] = None, config: Optional[VPRLConfig] = None):
         """
-        Initialize VPRL Sampler
+        初始化 VPRL 采样器
         
         Args:
-            model_path: Path to RL4CO model checkpoint (overrides config)
-            config: VPRLConfig instance or None to use defaults
+            model_path: RL4CO 模型检查点路径 (覆盖配置)
+            config: VPRLConfig 实例或 None 使用默认值
         """
-        # Load configuration
+        # 加载配置
         if config is None:
             config_file = os.path.join(os.path.dirname(__file__), "config.json")
             if os.path.exists(config_file):
@@ -76,14 +69,14 @@ class VPRLSampler:
         else:
             self.config = config
         
-        # Override model path if provided
+        # 如果提供了模型路径则覆盖
         if model_path is not None:
             self.config.model_path = model_path
         
-        # Setup logging
+        # 设置日志
         self._setup_logging()
         
-        # Model will be loaded on demand
+        # 模型将按需加载
         self.model = None
         self.current_model_path = None
         
@@ -91,18 +84,18 @@ class VPRLSampler:
         self.logger.info(f"Configuration:\n{self.config}")
     
     def _setup_logging(self):
-        """Setup logging configuration"""
+        """设置日志配置"""
         self.logger = logging.getLogger("VPRL")
         self.logger.setLevel(getattr(logging, self.config.log_level))
         
-        # Console handler
+        # 控制台处理器
         console_handler = logging.StreamHandler()
         console_handler.setLevel(getattr(logging, self.config.log_level))
         formatter = logging.Formatter('[%(levelname)s] %(message)s')
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
         
-        # File handler (if specified)
+        # 文件处理器 (如果指定)
         if self.config.log_file:
             os.makedirs(os.path.dirname(self.config.log_file), exist_ok=True)
             file_handler = logging.FileHandler(self.config.log_file)
@@ -113,13 +106,13 @@ class VPRLSampler:
     
     def _select_model_by_size(self, num_customers: int) -> str:
         """
-        Select appropriate model based on instance size
+        根据实例规模选择合适的模型
         
         Args:
-            num_customers: Number of customers
+            num_customers: 客户数量
             
         Returns:
-            Model path
+            模型路径
         """
         model_path = self.config.get_model_for_size(num_customers)
         self.logger.info(f"Auto-selected model for {num_customers} customers: {model_path}")
@@ -127,16 +120,16 @@ class VPRLSampler:
     
     def _load_model(self, model_path: str) -> bool:
         """
-        Load RL4CO model with error handling
+        加载 RL4CO 模型并进行错误处理
         
         Args:
-            model_path: Path to model checkpoint
+            model_path: 模型检查点路径
             
         Returns:
-            True if successful, False otherwise
+            成功返回 True,否则返回 False
         """
         try:
-            # Check if already loaded
+            # 检查是否已加载
             if self.model is not None and self.current_model_path == model_path:
                 self.logger.debug(f"Model already loaded: {model_path}")
                 return True
@@ -147,17 +140,14 @@ class VPRLSampler:
                 self.logger.error(f"Model file not found: {model_path}")
                 return False
             
-            # Load model with device mapping to handle CUDA device mismatch
-            # Map all tensors to the configured device (cpu or cuda:0)
+
+
             import torch
             import torch.serialization
             import pickle
-            import tempfile
-            import os as os_module  # Import at function level to avoid scoping issues
-            map_location = self.config.device if self.config.device == 'cpu' else 'cuda:0'
             
-            # Apply TorchRL compatibility aliases at module level
-            # This ensures old API names work during model initialization
+            # TorchRL 兼容性修复: 映射旧版API名称到新版
+            # 因为RouteFinder中的RL4CO版本和RouteFinder本身版本中的torchrl版本不兼容(很奇怪)
             try:
                 import torchrl.data.tensor_specs as specs
                 if not hasattr(specs, 'CompositeSpec'):
@@ -170,111 +160,75 @@ class VPRLSampler:
             except Exception as e:
                 self.logger.debug(f"Could not apply TorchRL aliases: {e}")
             
-            # Try to load as RouteFinder model first, then fall back to POMO
-            try:
-                from routefinder.models import RouteFinderBase
+            # 加载 RouteFinder 模型
+            from routefinder.models import RouteFinderBase
+            
+            # 应用 CompatibilityUnpickler 补丁以兼容旧 TorchRL API
+            _original_load = torch.serialization._load
+            
+            def _patched_load(zip_file, map_location, pickle_module, 
+                            pickle_file='data.pkl', overall_storage=None, 
+                            **pickle_load_args):
+                """注入 CompatibilityUnpickler 的 find_class 逻辑的补丁 _load"""
+                original_unpickler = pickle_module.Unpickler
                 
-                # Apply CompatibilityUnpickler patch for old TorchRL API compatibility
-                # Save original _load function
-                _original_load = torch.serialization._load
+                class PatchedUnpickler(original_unpickler):
+                    def find_class(self, mod_name, name):
+                        # 旧检查点的 TorchRL API 重映射
+                        if mod_name == 'torchrl.data.tensor_specs':
+                            if name == 'CompositeSpec':
+                                from torchrl.data.tensor_specs import Composite
+                                return Composite
+                            elif name == 'BoundedTensorSpec':
+                                from torchrl.data.tensor_specs import Bounded
+                                return Bounded
+                            elif name == 'UnboundedContinuousTensorSpec':
+                                from torchrl.data.tensor_specs import UnboundedContinuous
+                                return UnboundedContinuous
+                            elif name == 'UnboundedDiscreteTensorSpec':
+                                from torchrl.data.tensor_specs import UnboundedDiscrete
+                                return UnboundedDiscrete
+                        return super().find_class(mod_name, name)
                 
-                def _patched_load(zip_file, map_location, pickle_module, 
-                                pickle_file='data.pkl', overall_storage=None, 
-                                **pickle_load_args):
-                    """Patched _load that injects CompatibilityUnpickler's find_class logic"""
-                    original_unpickler = pickle_module.Unpickler
-                    
-                    class PatchedUnpickler(original_unpickler):
-                        def find_class(self, mod_name, name):
-                            # TorchRL API remappings for old checkpoints
-                            if mod_name == 'torchrl.data.tensor_specs':
-                                if name == 'CompositeSpec':
-                                    from torchrl.data.tensor_specs import Composite
-                                    return Composite
-                                elif name == 'BoundedTensorSpec':
-                                    from torchrl.data.tensor_specs import Bounded
-                                    return Bounded
-                                elif name == 'UnboundedContinuousTensorSpec':
-                                    from torchrl.data.tensor_specs import UnboundedContinuous
-                                    return UnboundedContinuous
-                                elif name == 'UnboundedDiscreteTensorSpec':
-                                    from torchrl.data.tensor_specs import UnboundedDiscrete
-                                    return UnboundedDiscrete
-                            return super().find_class(mod_name, name)
-                    
-                    try:
-                        pickle_module.Unpickler = PatchedUnpickler
-                        return _original_load(zip_file, map_location, pickle_module, 
-                                            pickle_file, overall_storage, **pickle_load_args)
-                    finally:
-                        pickle_module.Unpickler = original_unpickler
-                
-                # Apply patch and load model
                 try:
-                    torch.serialization._load = _patched_load
-                    
-                    # Fix for RNG state CUDA loading error:
-                    # Load checkpoint to CPU first to avoid RNG state device mapping issues
-                    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
-                    
-                    # Remove RNG states if present (not needed for inference)
-                    if 'rng_states' in checkpoint:
-                        self.logger.debug("Removing RNG states from checkpoint (not needed for inference)")
-                        del checkpoint['rng_states']
-                    
-                    # Remove training-only hyperparameters that cause loading errors
-                    if 'hyper_parameters' in checkpoint:
-                        training_only_params = ['normalize_reward', 'alpha', 'epsilon', 'norm_operation']
-                        for param in training_only_params:
-                            if param in checkpoint['hyper_parameters']:
-                                self.logger.debug(f"Removing training-only parameter: {param}={checkpoint['hyper_parameters'][param]}")
-                                checkpoint['hyper_parameters'].pop(param)
-                    
-                    # Always use manual loading to avoid Lightning's parameter validation
-                    if 'hyper_parameters' in checkpoint and 'state_dict' in checkpoint:
-                        hparams = checkpoint['hyper_parameters'].copy()
-                        
-                        self.model = RouteFinderBase(**hparams)
-                        
-                        # Load state dict
-                        self.model.load_state_dict(checkpoint['state_dict'], strict=False)
-                        
-                        self.logger.info("Loaded as RouteFinder model")
-                    else:
-                        raise ValueError("Checkpoint missing required keys: hyper_parameters or state_dict")
+                    pickle_module.Unpickler = PatchedUnpickler
+                    return _original_load(zip_file, map_location, pickle_module, 
+                                        pickle_file, overall_storage, **pickle_load_args)
                 finally:
-                    # Always restore original function
-                    torch.serialization._load = _original_load
-                    
-            except (ImportError, Exception) as e:
-                self.logger.warning(f"RouteFinder loading failed: {type(e).__name__}: {e}")
-                self.logger.debug(f"Not a RouteFinder model, trying POMO")
+                    pickle_module.Unpickler = original_unpickler
+            
+            # 应用补丁并加载模型
+            try:
+                torch.serialization._load = _patched_load
                 
-                # Fix for RNG state CUDA loading error:
-                # Load checkpoint to CPU first, remove RNG states, then load model
+                # RNG 状态 CUDA 加载错误的修复:
+                # 首先将检查点加载到 CPU 以避免 RNG 状态设备映射问题
                 checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
                 
-                # Remove RNG states if present (not needed for inference)
+                # 删除 RNG 状态 (推理不需要,且会导致GPU推理失败)
                 if 'rng_states' in checkpoint:
                     self.logger.debug("Removing RNG states from checkpoint (not needed for inference)")
                     del checkpoint['rng_states']
                 
-                # Save cleaned checkpoint to temporary file for load_from_checkpoint
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.ckpt', delete=False) as tmp_file:
-                    tmp_path = tmp_file.name
-                    torch.save(checkpoint, tmp_path)
+                # 删除导致加载错误的仅训练超参数
+                if 'hyper_parameters' in checkpoint:
+                    training_only_params = ['normalize_reward', 'alpha', 'epsilon', 'norm_operation']
+                    for param in training_only_params:
+                        if param in checkpoint['hyper_parameters']:
+                            self.logger.debug(f"Removing training-only parameter: {param}={checkpoint['hyper_parameters'][param]}")
+                            checkpoint['hyper_parameters'].pop(param)
                 
-                try:
-                    self.model = POMO.load_from_checkpoint(
-                        tmp_path,
-                        map_location='cpu'
-                    )
-                    self.logger.info("Loaded as POMO model")
-                finally:
-                    # Clean up temporary file
-                    if os_module.path.exists(tmp_path):
-                        os_module.unlink(tmp_path)
+                # 手动加载以避免 Lightning 的参数验证
+                if 'hyper_parameters' in checkpoint and 'state_dict' in checkpoint:
+                    hparams = checkpoint['hyper_parameters'].copy()
+                    self.model = RouteFinderBase(**hparams)
+                    self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+                    self.logger.info("Loaded as RouteFinder model")
+                else:
+                    raise ValueError("Checkpoint missing required keys: hyper_parameters or state_dict")
+            finally:
+                # 始终恢复原始函数
+                torch.serialization._load = _original_load
             
             self.model.eval()
             self.model = self.model.to(self.config.device)
@@ -284,7 +238,7 @@ class VPRLSampler:
             return True
             
         except Exception as e:
-            # Use error handler
+            # 使用错误处理器
             should_continue, action = ErrorHandler.handle_model_loading_error(e)
             return False
     
@@ -294,37 +248,37 @@ class VPRLSampler:
         num_solutions_needed: int,
         retry_count: int = 0) -> tuple:
         """
-        Generate solutions using RL4CO with oversampling and error handling
+        使用 RL4CO 生成解,支持过采样和错误处理
         
         Args:
-            sub_problem: CVRP sub-problem
-            num_solutions_needed: Number of solutions needed
-            retry_count: Current retry count
+            sub_problem: CVRP 子问题
+            num_solutions_needed: 需要的解数量
+            retry_count: 当前重试次数
             
         Returns:
-            Tuple of (best_solutions, all_costs, improvement) or (None, None, 0.0) on failure
+            (best_solutions, all_costs, improvement) 元组,失败时返回 (None, None, 0.0)
         """
         try:
-            # Calculate number of samples to generate (oversampling)
+            # 计算要生成的样本数 (过采样)
             num_samples = int(num_solutions_needed * self.config.oversampling_ratio)
             
             self.logger.info(
                 f"Oversampling: generating {num_samples} samples, will keep best {num_solutions_needed}"
             )
             
-            # Generate samples
-            # Use model's environment to properly initialize the problem
-            # This ensures all environment parameters are correctly set
+            # 生成样本
+            # 使用模型的环境来正确初始化问题
+            # 这确保所有环境参数都正确设置
             all_solutions = []
             all_costs = []
             
             with torch.no_grad():
                 for i in range(num_samples):
-                    # Create a fresh TensorDict for each sample
+                    # 为每个样本创建一个新的 TensorDict
                     td = sub_problem.tensordict.clone().to(self.config.device)
                     
-                    # Reset environment with the problem data
-                    # This properly initializes all environment state
+                    # 使用问题数据重置环境
+                    # 这正确初始化所有环境状态
                     td_reset = self.model.env.reset(td)
                     
                     out = self.model.policy(
@@ -334,13 +288,13 @@ class VPRLSampler:
                         return_actions=True
                     )
                     
-                    # Get cost
+                    # 获取成本
                     cost = self.model.env.get_reward(td_reset, out['actions'])
                     
                     all_solutions.append(out['actions'].cpu())
                     all_costs.append(cost.cpu().item())
             
-            # Select best solutions
+            # 选择最佳解
             best_solutions, improvement = self._select_best_solutions(
                 all_solutions, all_costs, num_solutions_needed
             )
@@ -353,16 +307,16 @@ class VPRLSampler:
             return best_solutions, all_costs, improvement
             
         except Exception as e:
-            # Use error handler
+            # 使用错误处理器
             should_retry, action = ErrorHandler.handle_generation_error(e, retry_count)
             
             if should_retry:
-                # Retry once
+                # 重试一次
                 return self._generate_vrpl_solutions(
                     sub_problem, num_solutions_needed, retry_count + 1
                 )
             else:
-                # Return empty results to trigger fallback
+                # 返回空结果以触发回退
                 return None, None, 0.0
     
     def _select_best_solutions(
@@ -371,24 +325,24 @@ class VPRLSampler:
         costs: List[float],
         num_to_keep: int) -> tuple:
         """
-        Select best solutions from oversampled pool
+        从过采样池中选择最佳解
         
         Args:
-            solutions: List of solution tensors
-            costs: List of costs
-            num_to_keep: Number of solutions to keep
+            solutions: 解张量列表
+            costs: 成本列表
+            num_to_keep: 要保留的解数量
             
         Returns:
             (best_solutions, oversampling_improvement_percentage)
         """
-        # Sort by cost
+        # 按成本排序
         sorted_indices = np.argsort(costs)
         best_indices = sorted_indices[:num_to_keep]
         
-        # Select best solutions
+        # 选择最佳解
         best_solutions = [solutions[i] for i in best_indices]
         
-        # Calculate improvement
+        # 计算改进
         avg_all = np.mean(costs)
         avg_kept = np.mean([costs[i] for i in best_indices])
         improvement = (avg_all - avg_kept) / avg_all * 100 if avg_all > 0 else 0.0
@@ -404,29 +358,29 @@ class VPRLSampler:
         temperature: Optional[float] = None,
         vrpl_ratio: Optional[float] = None) -> Dict:
         """
-        Solve MDVRP instance with VRPL-enhanced GA
+        使用 VRPL 增强的 GA 求解 MDVRP 实例
         
         Args:
-            instance_data: MDVRPInstance object or path to Cordeau file
-            enable_vrpl: Whether to use VRPL initialization (overrides config)
-            num_solutions_needed: Number of solutions needed (overrides config)
-            oversampling_ratio: Oversampling ratio (overrides config)
-            temperature: Sampling temperature (overrides config)
-            vrpl_ratio: VRPL ratio in population (overrides config)
+            instance_data: MDVRPInstance 对象或 Cordeau 文件路径
+            enable_vrpl: 是否使用 VRPL 初始化 (覆盖配置)
+            num_solutions_needed: 需要的解数量 (覆盖配置)
+            oversampling_ratio: 过采样比率 (覆盖配置)
+            temperature: 采样温度 (覆盖配置)
+            vrpl_ratio: 种群中的 VRPL 比率 (覆盖配置)
             
         Returns:
-            Solution dictionary with routes, cost, and performance metrics
+            包含路径、成本和性能指标的解字典
         """
         start_time = time.time()
         
-        # Load instance if it's a file path
+        # 如果是文件路径则加载实例
         if isinstance(instance_data, str):
             self.logger.info(f"Loading Cordeau instance from: {instance_data}")
             from .cordeau_parser import load_cordeau_instance
             instance_data = load_cordeau_instance(instance_data)
             self.logger.info(f"Instance loaded: {instance_data.num_depots} depots, {instance_data.num_customers} customers")
         
-        # Apply parameter overrides
+        # 应用参数覆盖
         enable_vrpl = enable_vrpl if enable_vrpl is not None else self.config.enable_vrpl
         num_solutions_needed = num_solutions_needed if num_solutions_needed is not None else self.config.num_solutions_needed
         vrpl_ratio = vrpl_ratio if vrpl_ratio is not None else self.config.vrpl_ratio
@@ -437,7 +391,7 @@ class VPRLSampler:
         self.logger.info(f"VRPL enabled: {enable_vrpl}")
         self.logger.info(f"Solutions needed: {num_solutions_needed}")
         
-        # Initialize metrics
+        # 初始化指标
         vrpl_time = 0.0
         conversion_time = 0.0
         all_routes = []
@@ -450,15 +404,15 @@ class VPRLSampler:
         num_valid = 0
         num_invalid = 0
         
-        # Step 1: Decompose MDVRP if VRPL is enabled
+        # 步骤 1: 如果启用 VRPL 则分解 MDVRP
         if enable_vrpl:
             try:
                 self.logger.info(f"Decomposing MDVRP instance...")
                 
-                # Get number of customers for model selection
+                # 获取客户数量以选择模型
                 num_customers = instance_data.num_customers
                 
-                # Select and load model
+                # 选择并加载模型
                 model_path = self._select_model_by_size(num_customers)
                 model_used = model_path
                 
@@ -466,7 +420,7 @@ class VPRLSampler:
                     self.logger.warning("Model loading failed, disabling VRPL")
                     enable_vrpl = False
                 else:
-                    # Decompose MDVRP
+                    # 分解 MDVRP
                     sub_problems = InstanceDecomposer.decompose_mdvrp(
                         instance=instance_data,
                         strategy=self.config.assignment_strategy
@@ -476,7 +430,7 @@ class VPRLSampler:
                         f"Decomposed into {len(sub_problems)} CVRP sub-problems"
                     )
                     
-                    # Step 2: Generate solutions for each depot
+                    # 步骤 2: 为每个仓库生成解
                     vrpl_start = time.time()
                     
                     for sub_problem in sub_problems:
@@ -485,13 +439,13 @@ class VPRLSampler:
                             f"({len(sub_problem.customer_indices)} customers)"
                         )
                         
-                        # Generate solutions with oversampling
+                        # 使用过采样生成解
                         result = self._generate_vrpl_solutions(
                             sub_problem=sub_problem,
                             num_solutions_needed=num_solutions_needed
                         )
                         
-                        # Check if generation failed
+                        # 检查生成是否失败
                         if result[0] is None:
                             self.logger.warning(
                                 f"Failed to generate solutions for depot {sub_problem.depot_id + 1}"
@@ -506,18 +460,18 @@ class VPRLSampler:
                         kept_costs_list.extend(all_costs[:len(best_solutions)])
                         oversampling_improvement += improvement
                         
-                        # Step 3: Convert solutions to Cordeau format
+                        # 步骤 3: 将解转换为 Cordeau 格式
                         conversion_start = time.time()
                         
                         for idx, solution_tensor in enumerate(best_solutions):
                             try:
-                                # Create customer mapping
+                                # 创建客户映射
                                 customer_mapping = {
                                     i: sub_problem.customer_indices[i]
                                     for i in range(len(sub_problem.customer_indices))
                                 }
                                 
-                                # Convert to routes
+                                # 转换为路径
                                 routes = SolutionConverter.convert_rl4co_to_cordeau(
                                     actions=solution_tensor,
                                     depot_id=sub_problem.depot_id,
@@ -528,7 +482,7 @@ class VPRLSampler:
                                     capacity=sub_problem.capacity
                                 )
                                 
-                                # Validate routes
+                                # 验证路径
                                 for route in routes:
                                     is_valid, error_msg = SolutionConverter.validate_route(
                                         route=route,
@@ -557,15 +511,15 @@ class VPRLSampler:
                         conversion_time += time.time() - conversion_start
                     
                     vrpl_time = time.time() - vrpl_start
-                    oversampling_improvement /= len(sub_problems) if len(sub_problems) > 0 else 1  # Average
+                    oversampling_improvement /= len(sub_problems) if len(sub_problems) > 0 else 1  # 平均值
                     
                     self.logger.info(f"VRPL generation completed in {vrpl_time:.2f}s")
                     self.logger.info(f"Generated {num_samples_generated} samples, kept {num_solutions_kept}")
                     
-                    # Log partial success
+                    # 记录部分成功
                     ErrorHandler.log_partial_success(num_valid, num_valid + num_invalid)
                     
-                    # Check if we have any valid solutions
+                    # 检查是否有任何有效解
                     if num_valid == 0:
                         self.logger.warning("No valid VRPL solutions, falling back to pure GA_Java")
                         enable_vrpl = False
@@ -580,7 +534,7 @@ class VPRLSampler:
                 else:
                     raise
         
-        # Step 4: Call GA_Java
+        # 步骤 4: 调用 GA_Java
         from .ga_java_wrapper import GAJavaWrapper
         
         ga_wrapper = GAJavaWrapper()
@@ -591,7 +545,7 @@ class VPRLSampler:
             convergence_interval=self.config.convergence_report_interval
         )
         
-        # Step 5: Collect metrics
+        # 步骤 5: 收集指标
         total_time = time.time() - start_time
         
         metrics = PerformanceMetrics(
@@ -610,7 +564,7 @@ class VPRLSampler:
             ga_iterations=ga_result.get('ga_iterations', 0),
             ga_final_cost=ga_result['total_cost'],
             convergence_curve=ga_result.get('convergence_curve', []),
-            improvement_vs_random=0.0,  # TODO: Calculate if baseline available
+            improvement_vs_random=0.0,  # TODO: 如果有基线则计算
             vrpl_contribution=oversampling_improvement
         )
         

@@ -3,21 +3,9 @@
 
 该模块提供MDVRP问题的动态重规划功能，当道路被阻塞时，
 可以快速生成新的路径规划方案。
-"""
 
-from .models import (
-    VehicleState,
-    TemporaryDepot,
-    BlockedEdge,
-    DepotInput,
-    CustomerInput,
-    RouteInput,
-    BlockedEdgeInput,
-    ReplanRequest,
-    RouteOutput,
-    TemporaryDepotInfo,
-    ReplanResponse
-)
+简化版重规划：只处理被堵车辆的绕路，不重新分配任务。
+"""
 
 from .exceptions import (
     ReplanningError,
@@ -25,24 +13,14 @@ from .exceptions import (
     BlockedEdgeInSolution,
     InvalidVehiclePosition,
     NoFeasibleSolution,
-    UnsupportedAlgorithm
+    UnsupportedAlgorithm,
+    InvalidBlockedEdge
 )
 
-from .service import ReplanningService
+from .simple_replanner import SimpleReplanner
+from .api_simple import handle_simple_replan, validate_replan_request
 
 __all__ = [
-    # Models
-    'VehicleState',
-    'TemporaryDepot',
-    'BlockedEdge',
-    'DepotInput',
-    'CustomerInput',
-    'RouteInput',
-    'BlockedEdgeInput',
-    'ReplanRequest',
-    'RouteOutput',
-    'TemporaryDepotInfo',
-    'ReplanResponse',
     # Exceptions
     'ReplanningError',
     'CapacityConstraintViolation',
@@ -50,6 +28,9 @@ __all__ = [
     'InvalidVehiclePosition',
     'NoFeasibleSolution',
     'UnsupportedAlgorithm',
-    # Service
-    'ReplanningService',
+    'InvalidBlockedEdge',
+    # Simple Replanner
+    'SimpleReplanner',
+    'handle_simple_replan',
+    'validate_replan_request',
 ]

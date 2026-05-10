@@ -58,7 +58,6 @@ algorithms = [
         "params": {
             "max_iterations": 100,
             "population_size": 20,
-            "rl_seed_ratio": 0.2,
             "num_rl_samples": 10,
             "use_gpu": False  # 测试时使用CPU
         }

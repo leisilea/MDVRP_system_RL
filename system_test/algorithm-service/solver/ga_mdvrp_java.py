@@ -134,12 +134,12 @@ class GAMDVRPJava:
             print(f"{'='*60}")
             
             if os.path.exists(solution_file):
-                routes, total_cost = self._parse_solution_file(solution_file)
+                routes, total_cost = self._parse_solution_file(solution_file, instance_data)
             else:
                 print(f"[WARNING] 未找到输出文件: {solution_file}")
                 # 尝试从标准输出解析成本和路径
                 total_cost = self._extract_cost_from_output(result.stdout)
-                routes = self._extract_routes_from_output(result.stdout)
+                routes = self._extract_routes_from_output(result.stdout, instance_data)
             
             # 验证客户覆盖
             all_visited_customers = set()
@@ -227,7 +227,7 @@ class GAMDVRPJava:
             cmd,
             capture_output=True,
             text=True,
-            timeout=3600,  # 60分钟超时（允许大规模实例运行）
+            timeout=600,  # 60分钟超时（允许大规模实例运行）
             cwd=self.ga_mdvrp_path
         )
         
@@ -267,8 +267,11 @@ class GAMDVRPJava:
             y = int(round(depot['y']))  # 转换为整数
             f.write(f"{i} {x} {y}\n")
     
-    def _parse_solution_file(self, filepath):
-        """解析 Java 程序输出的解决方案文件"""
+    def _parse_solution_file(self, filepath, instance_data):
+        """
+        解析 Java 程序输出的解决方案文件
+        修复：计算每条路径的实际成本
+        """
         routes = []
         total_cost = 0
         
@@ -281,19 +284,27 @@ class GAMDVRPJava:
             matches = re.findall(route_pattern, content)
             
             for match in matches:
-                depot_id = int(match[0]) - 1
+                depot_id = int(match[0]) - 1  # Java是1-indexed，转为0-indexed
                 vehicle_id = int(match[1])
                 nodes = [int(x) for x in match[2].split()]
                 
-                # 提取客户（去掉仓库节点）
+                # 提取客户（去掉仓库节点，Java是1-indexed）
                 customers = [n - 1 for n in nodes if n > 0]
                 
-                routes.append({
-                    'depot_id': depot_id,
-                    'vehicle_id': vehicle_id,
-                    'customers': customers,
-                    'cost': 0
-                })
+                if customers:
+                    # 计算路径成本
+                    cost = self._calculate_route_cost(
+                        depot_id, 
+                        customers, 
+                        instance_data
+                    )
+                    
+                    routes.append({
+                        'depot_id': depot_id,
+                        'vehicle_id': vehicle_id,
+                        'customers': customers,
+                        'cost': cost
+                    })
             
             # 提取总成本
             cost_pattern = r'(?:Total distance|Cost):\s*([\d.]+)'
@@ -327,8 +338,11 @@ class GAMDVRPJava:
         
         return 0.0
     
-    def _extract_routes_from_output(self, output):
-        """从标准输出中提取路径信息"""
+    def _extract_routes_from_output(self, output, instance_data):
+        """
+        从标准输出中提取路径信息
+        修复：计算每条路径的实际成本
+        """
         routes = []
         
         try:
@@ -340,7 +354,7 @@ class GAMDVRPJava:
             
             if depot_matches:
                 for depot_id_str, routes_str in depot_matches:
-                    depot_id = int(depot_id_str) - 1  # 转换为0索引
+                    depot_id = int(depot_id_str) - 1  # Java是1-indexed，转为0-indexed
                     # 清理路径字符串（去掉 | 和多余空白）
                     routes_str_clean = routes_str.replace('|', '').strip()
                     
@@ -349,15 +363,24 @@ class GAMDVRPJava:
                     route_matches = re.findall(route_pattern, routes_str_clean)
                     
                     for vehicle_idx, route_str in enumerate(route_matches):
+                        # Java输出的是1-indexed客户ID
                         customer_ids = [int(c.strip()) for c in route_str.split(',') if c.strip()]
+                        # 转换为0-indexed
                         customers_0indexed = [c - 1 for c in customer_ids]
                         
                         if customers_0indexed:
+                            # 计算路径成本
+                            cost = self._calculate_route_cost(
+                                depot_id, 
+                                customers_0indexed, 
+                                instance_data
+                            )
+                            
                             routes.append({
-                                'depot_id': depot_id,
+                                'depot_id': depot_id,  # 0-indexed
                                 'vehicle_id': len(routes) + 1,
-                                'customers': customers_0indexed,
-                                'cost': 0
+                                'customers': customers_0indexed,  # 0-indexed
+                                'cost': cost
                             })
                 
                 print(f"[INFO] 从标准输出提取到 {len(routes)} 条路径")
@@ -375,11 +398,18 @@ class GAMDVRPJava:
                         customers_0indexed = [c - 1 for c in customer_ids]
                         
                         if customers_0indexed:
+                            # 计算路径成本
+                            cost = self._calculate_route_cost(
+                                depot_id, 
+                                customers_0indexed, 
+                                instance_data
+                            )
+                            
                             routes.append({
                                 'depot_id': depot_id,
                                 'vehicle_id': len(routes) + 1,
                                 'customers': customers_0indexed,
-                                'cost': 0
+                                'cost': cost
                             })
                     
                     print(f"[INFO] 使用备用模式提取到 {len(routes)} 条路径")
@@ -392,5 +422,43 @@ class GAMDVRPJava:
             traceback.print_exc()
         
         return routes
+    
+    def _calculate_route_cost(self, depot_id, customers, instance_data):
+        """
+        计算单条路径的成本（欧几里得距离）
+        
+        Args:
+            depot_id: 仓库索引（0-indexed）
+            customers: 客户索引列表（0-indexed）
+            instance_data: 问题实例数据
+        
+        Returns:
+            路径总成本
+        """
+        if not customers:
+            return 0.0
+        
+        depot = instance_data['depots'][depot_id]
+        depot_x, depot_y = depot['x'], depot['y']
+        
+        total_cost = 0.0
+        prev_x, prev_y = depot_x, depot_y
+        
+        # 从仓库到第一个客户，然后依次访问每个客户
+        for cust_idx in customers:
+            customer = instance_data['customers'][cust_idx]
+            cust_x, cust_y = customer['x'], customer['y']
+            
+            # 计算距离
+            dist = np.sqrt((cust_x - prev_x)**2 + (cust_y - prev_y)**2)
+            total_cost += dist
+            
+            prev_x, prev_y = cust_x, cust_y
+        
+        # 从最后一个客户返回仓库
+        dist = np.sqrt((depot_x - prev_x)**2 + (depot_y - prev_y)**2)
+        total_cost += dist
+        
+        return total_cost
 
 

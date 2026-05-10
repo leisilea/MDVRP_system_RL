@@ -38,7 +38,7 @@ class TestVPRLPreservation:
     
     @pytest.fixture
     def vprl_config_cpu(self):
-        """VPRL configuration for CPU testing"""
+        """CPU 测试的 VPRL 配置"""
         return VPRLConfig(
             model_path="models/test_model.ckpt",
             device='cpu',
@@ -47,7 +47,7 @@ class TestVPRLPreservation:
     
     @pytest.fixture
     def vprl_config_cuda(self):
-        """VPRL configuration for CUDA testing"""
+        """CUDA 测试的 VPRL 配置"""
         return VPRLConfig(
             model_path="models/test_model.ckpt",
             device='cuda',
@@ -56,11 +56,11 @@ class TestVPRLPreservation:
     
     def test_preservation_nonexistent_file_error_handling(self, vprl_config_cpu):
         """
-        Test that loading a non-existent file returns False with error log.
+        测试加载不存在的文件时返回 False 并记录错误日志
         
-        This behavior must be preserved after the fix.
+        修复后必须保持此行为不变
         
-        Requirements: 3.2
+        需求: 3.2
         """
         sampler = VPRLSampler(config=vprl_config_cpu)
         

@@ -1,8 +1,7 @@
 """
-Error handling utilities for VPRL-GA integration.
+VPRL-GA 集成的错误处理工具模块
 
-This module provides error handling functions for various failure scenarios
-in the VPRL-GA initialization workflow, ensuring graceful degradation.
+此模块为 VPRL-GA 初始化工作流中的各种失败场景提供错误处理函数,确保优雅降级
 """
 
 import logging
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ErrorContext:
-    """Context information for error handling"""
+    """错误处理的上下文信息"""
     error_type: str
     error_message: str
     retry_count: int = 0
@@ -23,20 +22,20 @@ class ErrorContext:
 
 
 class ErrorHandler:
-    """Handles errors in VPRL-GA workflow with graceful degradation"""
+    """处理 VPRL-GA 工作流中的错误,实现优雅降级"""
     
     @staticmethod
     def handle_model_loading_error(error: Exception) -> Tuple[bool, str]:
         """
-        Handle model loading failure.
+        处理模型加载失败
         
-        Args:
-            error: The exception that occurred
+        参数:
+            error: 发生的异常
             
-        Returns:
-            Tuple of (should_continue, fallback_action)
-            - should_continue: True if should continue with fallback
-            - fallback_action: Description of fallback action
+        返回:
+            元组 (should_continue, fallback_action)
+            - should_continue: 是否应该继续使用回退方案
+            - fallback_action: 回退操作的描述
         """
         logger.warning(f"Failed to load RL4CO model: {error}")
         logger.warning("Disabling VRPL initialization, using pure GA_Java")
@@ -50,17 +49,17 @@ class ErrorHandler:
         max_retries: int = 1
     ) -> Tuple[bool, str]:
         """
-        Handle solution generation failure.
+        处理解生成失败
         
-        Args:
-            error: The exception that occurred
-            retry_count: Current retry count
-            max_retries: Maximum number of retries
+        参数:
+            error: 发生的异常
+            retry_count: 当前重试次数
+            max_retries: 最大重试次数
             
-        Returns:
-            Tuple of (should_retry, action)
-            - should_retry: True if should retry, False if should fallback
-            - action: "retry" or "fallback"
+        返回:
+            元组 (should_retry, action)
+            - should_retry: 是否应该重试,False 表示应该回退
+            - action: "retry" 或 "fallback"
         """
         if retry_count < max_retries:
             logger.warning(
@@ -81,11 +80,11 @@ class ErrorHandler:
         error_message: str
     ) -> None:
         """
-        Handle route validation failure.
+        处理路径验证失败
         
-        Args:
-            route_info: Information about the route (depot, vehicle, etc.)
-            error_message: Validation error message
+        参数:
+            route_info: 路径信息(仓库、车辆等)
+            error_message: 验证错误消息
         """
         logger.warning(f"Invalid route ({route_info}): {error_message}")
         logger.warning("Skipping this solution")
@@ -96,11 +95,11 @@ class ErrorHandler:
         solution_index: int
     ) -> None:
         """
-        Handle solution conversion failure.
+        处理解转换失败
         
-        Args:
-            error: The exception that occurred
-            solution_index: Index of the solution that failed
+        参数:
+            error: 发生的异常
+            solution_index: 失败的解的索引
         """
         logger.warning(
             f"Failed to convert solution {solution_index}: {error}"
@@ -113,14 +112,14 @@ class ErrorHandler:
         filepath: str
     ) -> Tuple[bool, str]:
         """
-        Handle file I/O failure.
+        处理文件 I/O 失败
         
-        Args:
-            error: The exception that occurred
-            filepath: Path to the file that failed
+        参数:
+            error: 发生的异常
+            filepath: 失败的文件路径
             
-        Returns:
-            Tuple of (should_continue, fallback_action)
+        返回:
+            元组 (should_continue, fallback_action)
         """
         logger.error(f"Failed to write file {filepath}: {error}")
         logger.error("Continuing without initial solution file")
@@ -133,13 +132,13 @@ class ErrorHandler:
         error: Exception
     ) -> Tuple[bool, str]:
         """
-        Handle GA_Java execution failure.
+        处理 GA_Java 执行失败
         
-        Args:
-            error: The exception that occurred
+        参数:
+            error: 发生的异常
             
-        Returns:
-            Tuple of (should_continue, error_type)
+        返回:
+            元组 (should_continue, error_type)
         """
         logger.error(f"GA_Java execution failed: {error}")
         logger.error("Solve operation cannot continue")
@@ -152,11 +151,11 @@ class ErrorHandler:
         total_solutions: int
     ) -> None:
         """
-        Log partial success when some solutions are valid.
+        当部分解有效时记录部分成功
         
-        Args:
-            valid_solutions: Number of valid solutions
-            total_solutions: Total number of solutions attempted
+        参数:
+            valid_solutions: 有效解的数量
+            total_solutions: 尝试的总解数
         """
         if valid_solutions == 0:
             logger.warning(
@@ -180,15 +179,15 @@ class ErrorHandler:
         retry_count: int = 0
     ) -> ErrorContext:
         """
-        Create error context for tracking.
+        创建用于跟踪的错误上下文
         
-        Args:
-            error_type: Type of error
-            error: The exception
-            retry_count: Current retry count
+        参数:
+            error_type: 错误类型
+            error: 异常对象
+            retry_count: 当前重试次数
             
-        Returns:
-            ErrorContext object
+        返回:
+            ErrorContext 对象
         """
         return ErrorContext(
             error_type=error_type,
@@ -204,26 +203,26 @@ def configure_logging(
     log_file: Optional[str] = None
 ) -> None:
     """
-    Configure logging for VPRL module.
+    配置 VPRL 模块的日志记录
     
-    Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_file: Optional log file path
+    参数:
+        level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_file: 可选的日志文件路径
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
     
-    # Configure format
+    # 配置格式
     log_format = (
         "[%(levelname)s] %(asctime)s - %(name)s - %(message)s"
     )
     date_format = "%Y-%m-%d %H:%M:%S"
     
-    # Configure handlers
+    # 配置处理器
     handlers = [logging.StreamHandler()]
     if log_file:
         handlers.append(logging.FileHandler(log_file))
     
-    # Configure root logger
+    # 配置根日志记录器
     logging.basicConfig(
         level=log_level,
         format=log_format,
@@ -232,6 +231,6 @@ def configure_logging(
         force=True
     )
     
-    # Set VPRL logger level
+    # 设置 VPRL 日志记录器级别
     vprl_logger = logging.getLogger("VPRL")
     vprl_logger.setLevel(log_level)

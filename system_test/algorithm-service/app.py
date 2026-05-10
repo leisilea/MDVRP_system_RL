@@ -247,82 +247,13 @@ def solve_mdvrp():
         'timestamp': time.time()
     })
 
- #目前算法是写在前端,未使用此接口
-# @app.route('/api/algorithms', methods=['GET'])
-# def list_algorithms():
-#     # 列出可用的算法列表
-#     return jsonify({
-#         'success': True,
-#         'data': {
-#             'algorithms': [
-#                 {
-#                     'id': 'genetic',
-#                     'name': '遗传算法 (GA-MDVRP)',
-#                     'description': '基于 Ombuki-Berman 2009 论文的遗传算法 Java 实现',
-#                     'status': 'available',
-#                     'aliases': ['GA'],
-#                     'paper': 'Ombuki-Berman & Hanshar (2009)',
-#                     'source': 'markusmkim/GA-MDVRP',
-#                     'requires': 'Java 11+'
-#                 },
-#                 {
-#                     'id': 'ga_multiprogramming',
-#                     'name': '多进程遗传算法 (GA Multiprocessing)',
-#                     'description': '使用多进程加速的遗传算法 Python 实现',
-#                     'status': 'available',
-#                     'aliases': []
-#                 },
-#                 {
-#                     'id': 'ACO',
-#                     'name': '蚁群算法 (ACO)',
-#                     'description': '模拟蚂蚁觅食行为的优化算法',
-#                     'status': 'available',
-#                     'aliases': []
-#                 },
-#                 {
-#                     'id': 'PSO',
-#                     'name': '粒子群算法 (PSO)',
-#                     'description': '基于群体智能的优化算法',
-#                     'status': 'available',
-#                     'aliases': []
-#                 },
-#                 {
-#                     'id': 'GA_RL_HYBRID',
-#                     'name': 'GA + RouteFinder 混合求解器',
-#                     'description': '结合遗传算法和强化学习(RouteFinder)的混合求解器，使用RL生成高质量初始种群',
-#                     'status': 'available',
-#                     'aliases': ['ga_rl_hybrid', 'hybrid'],
-#                     'paper': 'RouteFinder (2024)',
-#                     'requires': 'PyTorch, TorchRL, CUDA (optional)'
-#                 }
-#             ]
-#         },
-#         'timestamp': time.time()
-#     })
-
-
-# 测试连接接口 - 未使用,已注释
-# @app.route('/api/test', methods=['POST'])
-# @handle_exceptions
-# def test_connection():
-#     """测试连接的简单接口"""
-#     data = request.json
-#     logger.info(f"测试接口收到数据: {data}")
-#     return jsonify({
-#         'success': True,
-#         'message': '连接成功！',
-#         'received': data,
-#         'timestamp': time.time()
-#     })
-
-
 @app.route('/api/replan', methods=['POST'])
 @handle_exceptions
 def replan_routes():
     """
-    重规划API端点
+    简化版重规划API端点
     
-    当道路被阻塞时，对现有路径进行动态重规划。
+    只处理被堵车辆的绕路重规划,不重新分配任务
     
     请求格式：
     {
@@ -340,123 +271,59 @@ def replan_routes():
         ],
         "vehicle_positions": {
             "1": 3
-        },
-        "algorithm": "GA",
-        "params": {
-            "max_iterations": 1000
         }
-    }
-    
-    返回格式：
-    {
-        "success": true,
-        "data": {
-            "new_routes": [...],
-            "replanned_route_ids": [1],
-            "cost_before": 450.5,
-            "cost_after": 480.3,
-            "cost_difference": 29.8,
-            "cost_change_percent": 6.62,
-            "algorithm": "GA",
-            "solve_time": 2.34,
-            "num_routes": 3,
-            "temporary_depots": [...]
-        },
-        "timestamp": 1234567890.123
     }
     """
     start_time = time.time()
     data = request.json
     
+    # 导入简化版重规划API处理函数和异常类
+    from replanning.api_simple import handle_simple_replan, validate_replan_request
+    from replanning.exceptions import (
+        BlockedEdgeInSolution,
+        InvalidVehiclePosition,
+        NoFeasibleSolution,
+        ReplanningError
+    )
+    
     # 验证输入数据
-    _validate_replan_request(data)
+    validate_replan_request(data)
     
-    # 解析请求参数
-    depots = data['depots']
-    customers = data['customers']
-    routes = data['routes']
-    blocked_edges = data['blocked_edges']
-    vehicle_positions = data.get('vehicle_positions')
-    algorithm = data.get('algorithm', 'GA')
-    params = data.get('params')
-    
-    logger.info(f"收到重规划请求 - 仓库数: {len(depots)}, 客户数: {len(customers)}, "
-               f"路径数: {len(routes)}, 阻塞路段数: {len(blocked_edges)}, 算法: {algorithm}")
+    logger.info(f"[简化重规划] 收到请求 - 仓库: {len(data['depots'])}, "
+               f"客户: {len(data['customers'])}, 路径: {len(data['routes'])}, "
+               f"阻塞路段: {len(data['blocked_edges'])}")
     
     try:
-        # 导入简化版重规划服务
-        from replanning.service_simple import SimpleReplanningService
-        from replanning.models import (
-            DepotInput, CustomerInput, RouteInput, BlockedEdgeInput
-        )
-        from replanning.exceptions import (
-            ReplanningError,
-            CapacityConstraintViolation,
-            BlockedEdgeInSolution,
-            InvalidVehiclePosition,
-            NoFeasibleSolution,
-            UnsupportedAlgorithm
-        )
+        # 执行简化重规划
+        result = handle_simple_replan(data)
         
-        # 转换输入数据为数据类
-        depot_inputs = [DepotInput(**depot) for depot in depots]
-        customer_inputs = [CustomerInput(**customer) for customer in customers]
-        route_inputs = [RouteInput(**route) for route in routes]
-        blocked_edge_inputs = [BlockedEdgeInput.from_dict(edge) for edge in blocked_edges]
-        
-        # 创建简化版重规划服务实例
-        service = SimpleReplanningService()
-        
-        # 执行重规划
-        result = service.replan(
-            depots=depot_inputs,
-            customers=customer_inputs,
-            routes=route_inputs,
-            blocked_edges=blocked_edge_inputs,
-            vehicle_positions=vehicle_positions,
-            algorithm=algorithm,
-            params=params
-        )
-        
-        # 转换响应为字典格式
-        response_data = result.to_dict()
-        
-        logger.info(f"重规划完成 - 新路径数: {result.num_routes}, "
-                   f"成本变化: {result.cost_difference:.2f} ({result.cost_change_percent:.2f}%), "
-                   f"耗时: {result.solve_time:.3f}s")
+        logger.info(f"[简化重规划] 完成 - 新路径数: {result['num_routes']}, "
+                   f"成本变化: {result['cost_difference']:.2f} ({result['cost_change_percent']:.2f}%), "
+                   f"耗时: {result['solve_time']:.3f}s")
         
         return jsonify({
             'success': True,
-            'data': response_data,
+            'data': result,
             'timestamp': time.time()
         })
         
-    except UnsupportedAlgorithm as e:
-        logger.error(f"不支持的算法: {str(e)}")
+    except ValueError as e:
+        logger.error(f"[简化重规划] 输入验证失败: {str(e)}")
         return jsonify({
             'success': False,
-            'error': '不支持的算法',
+            'error': '输入验证失败',
             'message': str(e),
-            'error_type': 'UnsupportedAlgorithm',
-            'details': {
-                'algorithm': e.algorithm,
-                'supported_algorithms': e.supported_algorithms
-            }
+            'error_type': 'ValidationError'
         }), 400
         
-    except CapacityConstraintViolation as e:
-        logger.error(f"容量约束违反: {str(e)}")
+    except Exception as e:
+        logger.error(f"[简化重规划] 执行失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'error': '容量约束违反',
+            'error': '重规划执行失败',
             'message': str(e),
-            'error_type': 'CapacityConstraintViolation',
-            'details': {
-                'vehicle_id': e.vehicle_id,
-                'remaining_capacity': e.remaining,
-                'required_capacity': e.required
-            }
-        }), 400
+            'error_type': 'ReplanningError'
+        }), 500
         
     except BlockedEdgeInSolution as e:
         logger.error(f"解决方案包含阻塞路段: {str(e)}")

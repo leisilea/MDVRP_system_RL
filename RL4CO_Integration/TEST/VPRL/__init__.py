@@ -1,6 +1,6 @@
 """
-VPRL: RL4CO VRPL Integration for GA-MDVRP
-Provides high-quality initial solutions using reinforcement learning
+VPRL: RL4CO 与 GA-MDVRP 的集成模块
+使用强化学习提供高质量的初始解
 """
 
 from .instance_decomposer import InstanceDecomposer, CVRPSubProblem

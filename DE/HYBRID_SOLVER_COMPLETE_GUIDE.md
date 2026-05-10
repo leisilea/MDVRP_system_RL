@@ -365,8 +365,7 @@ print(f"总成本: {result['total_cost']:.2f}")
 
 ```python
 GAMDVRPRLHybrid(
-    rl_seed_ratio=0.2,      # RL种子占比（推荐10-30%）
-    num_rl_samples=20,      # 每个depot采样数（推荐10-30）
+    num_rl_samples=20,      # RL种子数（推荐10-30，既是采样数也是生成的种子数）
     use_gpu=True,           # 使用GPU加速
     model_type='auto'       # 模型选择（auto/rf-pomo/rf-moe/...）
 )
@@ -376,8 +375,7 @@ GAMDVRPRLHybrid(
 
 | 参数 | 默认值 | 推荐范围 | 说明 |
 |------|--------|---------|------|
-| `rl_seed_ratio` | 0.2 | 0.1-0.3 | 种子比例越高，初始解越好，但时间越长 |
-| `num_rl_samples` | 20 | 10-30 | 采样数越多，解质量越高，但时间越长 |
+| `num_rl_samples` | 20 | 10-30 | 种子数越多，解质量越高，但时间越长 |
 | `use_gpu` | True | True | 强烈推荐使用GPU（速度提升10-20倍） |
 | `model_type` | 'auto' | 'auto' | 自动选择通常是最优的 |
 
@@ -395,7 +393,6 @@ def load_cordeau_instance(filepath):
 
 # 创建求解器
 solver = GAMDVRPRLHybrid(
-    rl_seed_ratio=0.2,
     num_rl_samples=20,
     use_gpu=True,
     model_type='auto'
